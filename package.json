@@ -4,7 +4,9 @@
   "description": "Browser-based image enhancement demo with limited DICOM image support",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "research": "uv run --with-requirements requirements-research.txt research_service.py",
+    "research:model": "powershell -ExecutionPolicy Bypass -File tools/download_fracatlas_model.ps1"
   },
   "keywords": [
     "image-processing",

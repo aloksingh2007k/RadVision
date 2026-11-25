@@ -18,6 +18,7 @@ const state = {
   invertPhotometric: false,
   originalImageSrc: "",
   enhancedImageSrc: "",
+  fractureCandidates: [],
   viewMode: "split",
   splitPosition: 50,
   zoomLevel: 1.0,
@@ -30,6 +31,7 @@ const state = {
   batchFiles: [],
   customParams: { ...IMAGE_PRESETS[0].pipeline }
 };
+let fractureServiceReady = false;
 
 const elements = {
   tabWorkstation: document.getElementById("tabWorkstation"),
@@ -69,6 +71,9 @@ const elements = {
   btnZoomReset: document.getElementById("btnZoomReset"),
   btnDownload: document.getElementById("btnDownload"),
   btnEnhancementSummary: document.getElementById("btnEnhancementSummary"),
+  fractureModelStatus: document.getElementById("fractureModelStatus"),
+  btnRunFractureResearch: document.getElementById("btnRunFractureResearch"),
+  fractureResearchResult: document.getElementById("fractureResearchResult"),
 
   // Measurement tools
   toolNone: document.getElementById("toolNone"),
@@ -163,6 +168,11 @@ document.addEventListener("DOMContentLoaded", () => {
   renderPresetGrid();
   syncControlsFromParams(state.customParams);
   loadStandardImageAndProcess(state.currentImageSource, "IMG", "SYNTHETIC");
+  refreshFractureServiceStatus();
+  const researchServiceRetry = window.setInterval(() => {
+    if (fractureServiceReady) window.clearInterval(researchServiceRetry);
+    else refreshFractureServiceStatus();
+  }, 4000);
 });
 
 function initEventListeners() {
@@ -300,6 +310,7 @@ function initEventListeners() {
   // Exports
   elements.btnDownload.addEventListener("click", downloadEnhancedSnapshot);
   elements.btnEnhancementSummary.addEventListener("click", generateEnhancementSummary);
+  elements.btnRunFractureResearch.addEventListener("click", runFractureResearch);
 
   // Studio Controls
   elements.sliderClaheClip.addEventListener("input", (e) => {
@@ -375,6 +386,83 @@ function redrawAnnotations() {
     canvas.height = rect.height;
     const ctx = canvas.getContext("2d");
     AnnotationTools.render(ctx, canvas.width, canvas.height, state.imgWidth, state.imgHeight, state.baseGray8);
+    drawFractureCandidates(ctx, canvas.width, canvas.height);
+  }
+}
+
+function drawFractureCandidates(ctx, canvasW, canvasH) {
+  ctx.save();
+  ctx.lineWidth = 2;
+  ctx.font = "600 12px system-ui, sans-serif";
+  state.fractureCandidates.forEach((box) => {
+    const x = box.x1 * canvasW, y = box.y1 * canvasH;
+    const w = (box.x2 - box.x1) * canvasW, h = (box.y2 - box.y1) * canvasH;
+    ctx.strokeStyle = "#fb7185";
+    ctx.strokeRect(x, y, w, h);
+    const label = "Research candidate";
+    const labelW = ctx.measureText(label).width + 10;
+    ctx.fillStyle = "#9f1239";
+    ctx.fillRect(x, Math.max(0, y - 20), labelW, 20);
+    ctx.fillStyle = "#fff1f2";
+    ctx.fillText(label, x + 5, Math.max(14, y - 6));
+  });
+  ctx.restore();
+}
+
+async function refreshFractureServiceStatus() {
+  const status = elements.fractureModelStatus;
+  const button = elements.btnRunFractureResearch;
+  try {
+    const response = await fetch("http://127.0.0.1:8765/health", { cache: "no-store" });
+    if (!response.ok) throw new Error("Local research service unavailable.");
+    const info = await response.json();
+    if (!info.model_available) {
+      fractureServiceReady = false;
+      status.textContent = "Research service is running, but the FracAtlas model is missing. See README setup steps.";
+      button.disabled = true;
+      return;
+    }
+    fractureServiceReady = true;
+    status.textContent = "Local research model ready (FracAtlas; musculoskeletal X-rays).";
+    button.disabled = false;
+  } catch (_error) {
+    fractureServiceReady = false;
+    status.textContent = "Local model service is offline. Start it with npm run research after setup.";
+    button.disabled = true;
+  }
+}
+
+async function runFractureResearch() {
+  if (!state.baseGray8 || !state.imgWidth || !state.imgHeight) return;
+  const button = elements.btnRunFractureResearch;
+  elements.fractureResearchResult.textContent = "Analyzing the original windowed image locally…";
+  button.disabled = true;
+  try {
+    const rgba = new Uint8ClampedArray(state.imgWidth * state.imgHeight * 4);
+    for (let i = 0; i < state.baseGray8.length; i++) {
+      const p = i * 4;
+      rgba[p] = rgba[p + 1] = rgba[p + 2] = state.baseGray8[i];
+      rgba[p + 3] = 255;
+    }
+    const blob = await imageDataToBlob(new ImageData(rgba, state.imgWidth, state.imgHeight));
+    const form = new FormData();
+    form.append("file", blob, "windowed-radiograph.png");
+    const response = await fetch("http://127.0.0.1:8765/predict", { method: "POST", body: form });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "Research prediction failed.");
+    state.fractureCandidates = payload.boxes || [];
+    redrawAnnotations();
+    elements.fractureResearchResult.textContent = state.fractureCandidates.length
+      ? `${state.fractureCandidates.length} candidate region(s) shown. These are experimental model localizations, not a diagnosis.`
+      : "No candidate regions returned. This does not rule out a fracture.";
+  } catch (error) {
+    state.fractureCandidates = [];
+    fractureServiceReady = false;
+    redrawAnnotations();
+    elements.fractureResearchResult.textContent = `Could not analyze image: ${error.message}`;
+    refreshFractureServiceStatus();
+  } finally {
+    button.disabled = !fractureServiceReady;
   }
 }
 
@@ -599,6 +687,9 @@ function updateHud() {
 
 function recomputeFromRawPixels() {
   if (!state.rawPixels) return;
+  state.fractureCandidates = [];
+  elements.fractureResearchResult.textContent = "";
+  redrawAnnotations();
   setLoading(true, "Enhancing image...");
 
   setTimeout(() => {

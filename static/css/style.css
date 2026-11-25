@@ -1021,6 +1021,45 @@ body {
   cursor: crosshair;
 }
 
+.research-panel {
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  border-radius: var(--radius-md);
+  background: rgba(8, 18, 34, 0.72);
+}
+
+.research-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.research-warning {
+  margin: 12px 0;
+  padding: 10px;
+  border-left: 3px solid var(--accent-amber);
+  background: rgba(245, 158, 11, 0.08);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.research-status,
+.research-result,
+.research-footnote {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.research-status { margin: 8px 0; }
+.research-result { margin-top: 10px; }
+.research-footnote { margin: 10px 0 0; }
+.research-panel .secondary-action-btn { width: 100%; justify-content: center; }
+.research-panel .secondary-action-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
 .secondary-action-btn {
   padding: 8px 14px;
   border: 1px solid var(--border-active);

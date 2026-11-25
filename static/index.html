@@ -378,6 +378,23 @@
             <i class="fa-solid fa-play"></i> Apply Custom Pipeline
           </button>
         </div>
+
+        <section class="research-panel" aria-labelledby="fractureResearchTitle">
+          <div class="research-panel-heading">
+            <div class="panel-title" id="fractureResearchTitle">
+              <i class="fa-solid fa-microscope"></i>
+              <span>Research fracture localization</span>
+            </div>
+            <span class="badge-tag">Experimental</span>
+          </div>
+          <p class="research-warning">Research output only. This model is not validated for patient care, does not provide an independent diagnosis, and cannot rule out a fracture.</p>
+          <div class="research-status" id="fractureModelStatus" role="status">Checking local model service…</div>
+          <button class="secondary-action-btn" id="btnRunFractureResearch" type="button" disabled>
+            <i class="fa-solid fa-crosshairs"></i> Find candidate regions
+          </button>
+          <div class="research-result" id="fractureResearchResult" aria-live="polite"></div>
+          <p class="research-footnote">Uses the original windowed image. Images are processed by the local research service and are not saved by this app.</p>
+        </section>
       </aside>
     </div>
 

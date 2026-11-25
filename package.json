@@ -1,0 +1,17 @@
+{
+  "name": "radvision-medical-imaging",
+  "version": "1.0.0",
+  "description": "Medical Image Preprocessing and Enhancement Workstation built with HTML5 Canvas, CSS3, Pure JavaScript, and Node.js",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "medical-imaging",
+    "x-ray",
+    "clahe",
+    "image-enhancement",
+    "html5-canvas"
+  ],
+  "license": "MIT"
+}

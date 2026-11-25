@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RadVision | Medical Image Preprocessing & Enhancement Workstation</title>
+  
+  <!-- Modern Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  
+  <!-- Progressive Dark Medical Theme CSS -->
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+  <!-- Top Application Header -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-icon">
+        <i class="fa-solid fa-lungs"></i>
+      </div>
+      <div>
+        <div class="brand-title">RadVision <span class="brand-badge">Clinical AI</span></div>
+      </div>
+    </div>
+
+    <!-- Center Navigation Tabs -->
+    <nav class="nav-tabs">
+      <button class="nav-tab-btn active" id="tabWorkstation">
+        <i class="fa-solid fa-microscope"></i> Single Scan Workstation
+      </button>
+      <button class="nav-tab-btn" id="tabBatch">
+        <i class="fa-solid fa-folder-tree"></i> Cohort Dataset Suite
+      </button>
+    </nav>
+
+    <!-- Right Status -->
+    <div class="header-status">
+      <div class="status-pill">
+        <span class="status-beacon"></span>
+        <span>HTML5 Canvas &amp; JS Engine: Online</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Application Body -->
+  <main class="main-container">
+
+    <!-- View 1: Clinical Workstation View -->
+    <div class="workstation-grid" id="viewWorkstation">
+      
+      <!-- ================= LEFT PANEL: Source & Presets ================= -->
+      <aside class="card-panel panel-left">
+        <div class="panel-header">
+          <div class="panel-title">
+            <i class="fa-solid fa-file-medical"></i>
+            <span>Radiograph Input</span>
+          </div>
+          <span class="badge-tag">Upload / Sample</span>
+        </div>
+
+        <!-- File Dropzone -->
+        <div class="dropzone" id="dropzone">
+          <i class="fa-solid fa-cloud-arrow-up dropzone-icon"></i>
+          <div class="dropzone-title">Upload DICOM (.dcm) or X-Ray</div>
+          <div class="dropzone-hint">16-bit DICOM, PNG, JPG, or TIFF (100% Local)</div>
+          <input type="file" id="fileInput" accept="image/*,.dcm,application/dicom" style="display: none;" />
+        </div>
+
+        <!-- Sample X-Rays Library -->
+        <div class="panel-header" style="margin-top: 6px;">
+          <div class="panel-title" style="font-size: 13px;">
+            <i class="fa-solid fa-images"></i>
+            <span>Clinical Reference Sets</span>
+          </div>
+          <span class="badge-tag">7 Scans</span>
+        </div>
+        <div class="sample-list" id="sampleList">
+          <!-- Populated dynamically via JS -->
+        </div>
+
+        <!-- Clinical Presets Pipeline -->
+        <div class="panel-header" style="margin-top: 8px;">
+          <div class="panel-title" style="font-size: 13px;">
+            <i class="fa-solid fa-sliders"></i>
+            <span>Algorithmic Presets</span>
+          </div>
+          <span class="badge-tag">Clinical</span>
+        </div>
+        <div class="preset-grid" id="presetContainer">
+          <!-- Populated dynamically via JS -->
+        </div>
+      </aside>
+
+      <!-- ================= CENTER PANEL: Viewport & Inspection ================= -->
+      <section class="card-panel viewport-card">
+        <!-- Viewport Toolbar -->
+        <div class="viewport-toolbar">
+          <!-- View Modes -->
+          <div class="view-mode-group">
+            <button class="btn-tool active" id="btnModeSplit" title="Interactive Split-Screen Drag Slider">
+              <i class="fa-solid fa-table-columns"></i> Split Compare
+            </button>
+            <button class="btn-tool" id="btnModeDual" title="Side-by-Side Dual View">
+              <i class="fa-solid fa-border-all"></i> Dual View
+            </button>
+            <button class="btn-tool" id="btnModeEnh" title="Enhanced Result Only">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> Enhanced Only
+            </button>
+          </div>
+
+          <!-- Inspection Tools -->
+          <div class="tool-group">
+            <button class="btn-tool" id="btnZoomIn" title="Zoom In (Scroll Wheel)">
+              <i class="fa-solid fa-magnifying-glass-plus"></i>
+            </button>
+            <button class="btn-tool" id="btnZoomOut" title="Zoom Out">
+              <i class="fa-solid fa-magnifying-glass-minus"></i>
+            </button>
+            <button class="btn-tool" id="btnZoomReset" title="Reset Zoom & Pan">
+              <i class="fa-solid fa-arrows-rotate"></i>
+            </button>
+          </div>
+
+          <!-- Actions -->
+          <div class="tool-group" style="gap: 6px; background: transparent; border: none;">
+            <button class="secondary-action-btn" id="btnClinicalReport" title="Generate Printable Radiology Summary Report">
+              <i class="fa-solid fa-file-waveform"></i> Clinical Report
+            </button>
+            <button class="primary-action-btn" id="btnDownload">
+              <i class="fa-solid fa-download"></i> Export Scan
+            </button>
+          </div>
+        </div>
+
+        <!-- Clinical Measurement & Photometric Toolbar -->
+        <div class="clinical-tools-bar">
+          <div class="tool-group">
+            <button class="btn-tool active" id="toolNone" title="Default Compare / Pan">
+              <i class="fa-solid fa-hand"></i> Inspect
+            </button>
+            <button class="btn-tool" id="toolRuler" title="Calibrated Ruler (mm)">
+              <i class="fa-solid fa-ruler"></i> Ruler (mm)
+            </button>
+            <button class="btn-tool" id="toolAngle" title="3-Point Angle / Cobb Angle (°)">
+              <i class="fa-solid fa-compass-drafting"></i> Angle (°)
+            </button>
+            <button class="btn-tool" id="toolCtr" title="Cardiothoracic Ratio (Drag Heart Width, then Thoracic Width)">
+              <i class="fa-solid fa-heart-pulse"></i> CTR Ratio
+            </button>
+            <button class="btn-tool" id="toolRoi" title="ROI Attenuation & SNR Probe">
+              <i class="fa-solid fa-vector-square"></i> ROI Probe
+            </button>
+          </div>
+          <div class="tool-group">
+            <button class="btn-tool" id="btnInvert" title="Photometric Invert (MONOCHROME1 / MONOCHROME2)">
+              <i class="fa-solid fa-circle-half-stroke"></i> Invert
+            </button>
+            <button class="btn-tool" id="btnClearTools" title="Clear All Measurements">
+              <i class="fa-solid fa-eraser"></i> Clear
+            </button>
+          </div>
+        </div>
+
+        <!-- Main Radiographic Canvas / Stage -->
+        <div class="viewer-stage" id="viewerStage">
+          <!-- DICOM Metadata HUD -->
+          <div class="dicom-hud" id="dicomHud">
+            <div><strong>MOD:</strong> <span id="hudModality">DX</span> &bull; <strong>PART:</strong> <span id="hudBodyPart">CHEST</span></div>
+            <div><strong>WL/WW:</strong> <span id="hudWlWw">128 / 255</span> &bull; <strong>SPACING:</strong> <span id="hudSpacing">0.20 mm/px (est)</span></div>
+          </div>
+
+          <!-- Split Comparison Mode View -->
+          <div class="compare-container" id="compareContainer">
+            <div class="compare-image-wrap" id="compareWrap">
+              <!-- Background Layer: Raw Original Image -->
+              <img id="imgOriginal" class="img-layer" src="" alt="Raw X-Ray Original" />
+
+              <!-- Foreground Clip Layer: Enhanced Image -->
+              <div class="img-modified-overlay" id="overlayLayer">
+                <img id="imgEnhanced" class="img-layer" src="" alt="Enhanced Clinical Radiograph" />
+              </div>
+
+              <!-- CADe Triage Heatmap Overlay -->
+              <img id="triageHeatmapImg" class="triage-heatmap-layer" src="" alt="CADe Triage Heatmap" />
+
+              <!-- Interactive Clinical Annotation & Measurement Canvas -->
+              <canvas id="annotationCanvas" class="annotation-canvas"></canvas>
+
+              <!-- Interactive Split Drag Bar -->
+              <div class="split-handle" id="splitHandle">
+                <div class="handle-knob">
+                  <i class="fa-solid fa-arrows-left-right"></i>
+                </div>
+              </div>
+            </div>
+
+            <!-- Visual Labels -->
+            <div class="viewport-badge badge-left">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> Enhanced Clinical Result
+            </div>
+            <div class="viewport-badge badge-right">
+              <i class="fa-solid fa-circle-dot"></i> Original Raw Scan
+            </div>
+          </div>
+
+          <!-- Dual Side-by-Side View -->
+          <div class="dual-container" id="dualContainer" style="display: none;">
+            <div class="dual-card">
+              <img id="imgDualOrig" src="" alt="Raw X-Ray" />
+              <div class="viewport-badge badge-right">Original Raw Scan</div>
+            </div>
+            <div class="dual-card">
+              <img id="imgDualEnh" src="" alt="Enhanced X-Ray" />
+              <div class="viewport-badge badge-left">Enhanced Radiograph</div>
+            </div>
+          </div>
+
+          <!-- Processing Spinner Overlay -->
+          <div class="loading-overlay" id="loadingOverlay">
+            <div class="scanner-ring"></div>
+            <div class="loading-text" id="loadingText">Processing Radiograph via OpenCV...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= RIGHT PANEL: Metrics & Custom Studio ================= -->
+      <aside class="card-panel panel-metrics">
+        <div class="panel-header">
+          <div class="panel-title">
+            <i class="fa-solid fa-chart-line"></i>
+            <span>Clinical Quality Metrics</span>
+          </div>
+          <span class="badge-tag">IQA Benchmark</span>
+        </div>
+
+        <!-- Metric Score Cards -->
+        <div class="metrics-grid">
+          <div class="metric-box">
+            <div class="metric-label">
+              <span>PSNR</span>
+              <i class="fa-solid fa-wave-square"></i>
+            </div>
+            <div class="metric-value" id="valPsnr">-- dB</div>
+            <span class="metric-badge badge-neutral">Signal Fidelity</span>
+          </div>
+
+          <div class="metric-box">
+            <div class="metric-label">
+              <span>SSIM Index</span>
+              <i class="fa-solid fa-layer-group"></i>
+            </div>
+            <div class="metric-value" id="valSsim">--</div>
+            <span class="metric-badge badge-positive">Structural Map</span>
+          </div>
+
+          <div class="metric-box">
+            <div class="metric-label">
+              <span>CII Factor</span>
+              <i class="fa-solid fa-circle-half-stroke"></i>
+            </div>
+            <div class="metric-value" id="valCii">--x</div>
+            <span class="metric-badge badge-positive">Contrast Boost</span>
+          </div>
+
+          <div class="metric-box">
+            <div class="metric-label">
+              <span>Entropy Gain</span>
+              <i class="fa-solid fa-chart-pie"></i>
+            </div>
+            <div class="metric-value" id="valEntropy">--</div>
+            <span class="metric-badge badge-neutral">Shannon Info</span>
+          </div>
+        </div>
+
+        <!-- Histogram Profile -->
+        <div class="histogram-section">
+          <div class="histogram-header">
+            <span>256-Bin Attenuation Histogram</span>
+            <div class="histogram-legend">
+              <span><span class="legend-dot legend-orig"></span>Original</span>
+              <span><span class="legend-dot legend-enh"></span>Enhanced</span>
+            </div>
+          </div>
+          <canvas id="histCanvas" class="hist-canvas"></canvas>
+        </div>
+
+        <!-- DICOM Window Width / Window Level (WW/WL) -->
+        <div class="ww-wl-panel" id="wwWlPanel">
+          <div class="panel-header">
+            <div class="panel-title" style="font-size: 13px;">
+              <i class="fa-solid fa-sliders"></i>
+              <span>Window / Level (WW / WL)</span>
+            </div>
+            <span class="badge-tag" id="bitDepthBadge">8-Bit</span>
+          </div>
+          <div class="control-group">
+            <div class="control-label">
+              <span>Window Level (Center)</span>
+              <span class="control-value" id="valWl">128</span>
+            </div>
+            <input type="range" class="slider-custom" id="sliderWl" min="0" max="255" step="1" value="128" />
+          </div>
+          <div class="control-group">
+            <div class="control-label">
+              <span>Window Width (Contrast Span)</span>
+              <span class="control-value" id="valWw">255</span>
+            </div>
+            <input type="range" class="slider-custom" id="sliderWw" min="10" max="255" step="1" value="255" />
+          </div>
+        </div>
+
+        <!-- CADe Radiomics Triage Overlay -->
+        <div class="triage-card">
+          <div class="triage-header">
+            <span><i class="fa-solid fa-brain"></i> CADe Triage Heatmap</span>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 11px;">
+              <input type="checkbox" id="toggleTriage" /> Show Overlay
+            </label>
+          </div>
+          <div class="control-group">
+            <div class="control-label">
+              <span>Heatmap Opacity</span>
+              <span class="control-value" id="valTriageOpacity">55%</span>
+            </div>
+            <input type="range" class="slider-custom" id="sliderTriageOpacity" min="10" max="90" step="5" value="55" />
+          </div>
+          <div class="triage-stats">
+            <span>Asymmetry: <strong id="valTriageAsym">--%</strong></span>
+            <span>Hotspots: <strong id="valTriageHotspots">--</strong></span>
+          </div>
+          <div class="triage-disclaimer" id="triageSummary">
+            Bilateral attenuation &amp; focal gradient triage aid. Not a standalone clinical diagnosis.
+          </div>
+        </div>
+
+        <!-- Fine-Tuning Controls Studio -->
+        <div class="panel-header" style="margin-top: 6px;">
+          <div class="panel-title" style="font-size: 13px;">
+            <i class="fa-solid fa-gears"></i>
+            <span>Algorithmic Parameter Studio</span>
+          </div>
+        </div>
+
+        <div class="controls-accordion">
+          <!-- Denoising Filter -->
+          <div class="control-group">
+            <label class="control-label">
+              <span>Denoising Algorithm</span>
+            </label>
+            <select class="select-custom" id="selectDenoise">
+              <option value="none">None (Bypass)</option>
+              <option value="nlm">Non-Local Means (NLM) - Low-Dose</option>
+              <option value="bilateral" selected>Edge-Preserving Bilateral Filter</option>
+              <option value="median">Median Filter (Impulse Noise)</option>
+              <option value="gaussian">Gaussian Filter</option>
+            </select>
+          </div>
+
+          <!-- Contrast Filter -->
+          <div class="control-group">
+            <label class="control-label">
+              <span>Contrast Equalization</span>
+            </label>
+            <select class="select-custom" id="selectContrast">
+              <option value="clahe" selected>CLAHE (Adaptive Local)</option>
+              <option value="he">Global Histogram Equalization</option>
+              <option value="none">None</option>
+            </select>
+          </div>
+
+          <!-- CLAHE Clip Limit -->
+          <div class="control-group">
+            <div class="control-label">
+              <span>CLAHE Clip Limit</span>
+              <span class="control-value" id="valClaheClip">2.5</span>
+            </div>
+            <input type="range" class="slider-custom" id="sliderClaheClip" min="0.5" max="8.0" step="0.1" value="2.5" />
+          </div>
+
+          <!-- Gamma Correction -->
+          <div class="control-group">
+            <div class="control-label">
+              <span>Gamma Curve (γ)</span>
+              <span class="control-value" id="valGamma">1.00</span>
+            </div>
+            <input type="range" class="slider-custom" id="sliderGamma" min="0.3" max="2.2" step="0.05" value="1.0" />
+          </div>
+
+          <!-- Edge Sharpening -->
+          <div class="control-group">
+            <label class="control-label">
+              <span>Edge & Feature Enhancement</span>
+            </label>
+            <select class="select-custom" id="selectSharpen">
+              <option value="none">None</option>
+              <option value="unsharp" selected>Unsharp High-Frequency Mask</option>
+              <option value="laplacian">Laplacian Differential Sharpen</option>
+              <option value="sobel">Sobel Gradient Magnitude</option>
+              <option value="otsu">Otsu Tissue Segmentation</option>
+            </select>
+          </div>
+
+          <!-- Sharpen Strength -->
+          <div class="control-group">
+            <div class="control-label">
+              <span>Sharpening Gain</span>
+              <span class="control-value" id="valSharpenStrength">1.2</span>
+            </div>
+            <input type="range" class="slider-custom" id="sliderSharpenStrength" min="0.2" max="3.0" step="0.1" value="1.2" />
+          </div>
+
+          <!-- Pseudo-Color Palette -->
+          <div class="control-group">
+            <label class="control-label">
+              <span>False-Color Radiodensity Map</span>
+            </label>
+            <select class="select-custom" id="selectColormap">
+              <option value="monochrome" selected>Standard Monochrome</option>
+              <option value="bone">Radiological Bone Palette</option>
+              <option value="inferno">Inferno Thermal Density</option>
+              <option value="jet">Jet Multi-Spectral Heatmap</option>
+              <option value="viridis">Viridis Perceptual Uniform</option>
+              <option value="ocean">Ocean Radiopacity Gradient</option>
+            </select>
+          </div>
+
+          <!-- Apply Custom Studio Button -->
+          <button class="primary-action-btn" id="btnApplyCustom" style="width: 100%; justify-content: center; margin-top: 4px;">
+            <i class="fa-solid fa-play"></i> Apply Custom Pipeline
+          </button>
+        </div>
+      </aside>
+    </div>
+
+    <!-- View 2: Cohort Batch Dataset Processing View -->
+    <section class="card-panel batch-section" id="viewBatch">
+      <div class="panel-header">
+        <div class="panel-title">
+          <i class="fa-solid fa-folder-open"></i>
+          <span>Cohort Dataset Batch Processor</span>
+        </div>
+        <span class="badge-tag" id="batchCountPill">0 Scans Loaded</span>
+      </div>
+
+      <!-- Batch Dropzone -->
+      <div class="dropzone" id="batchDropzone" style="padding: 40px 20px;">
+        <i class="fa-solid fa-images dropzone-icon" style="font-size: 42px;"></i>
+        <div class="dropzone-title" style="font-size: 16px;">Drag & Drop Entire X-Ray Cohort / Dataset</div>
+        <div class="dropzone-hint">Select multiple DICOM / PNG / JPG files simultaneously</div>
+        <input type="file" id="batchFileInput" multiple accept="image/*" style="display: none;" />
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 12px;">
+        <button class="secondary-action-btn" id="btnLoadSampleCohort">
+          <i class="fa-solid fa-database"></i> Load Built-In Cohort (7 Scans)
+        </button>
+        <button class="primary-action-btn" id="btnProcessBatch" disabled>
+          <i class="fa-solid fa-bolt"></i> Process Cohort &amp; Download ZIP (with CSV Report)
+        </button>
+      </div>
+
+      <!-- Batch Table -->
+      <div class="batch-table-wrap">
+        <table class="batch-table">
+          <thead>
+            <tr>
+              <th>Scan #</th>
+              <th>Filename</th>
+              <th>Filesize</th>
+              <th>Status</th>
+              <th>PSNR (dB)</th>
+              <th>SSIM</th>
+              <th>Contrast Index (CII)</th>
+            </tr>
+          </thead>
+          <tbody id="batchTableBody">
+            <tr>
+              <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 32px;">
+                No scans queued. Drag and drop any set of X-ray images above.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Application Footer -->
+  <footer class="app-footer">
+    <div>
+      <strong>RadVision Workstation</strong> &copy; 2026 &bull; Medical Image Preprocessing and Enhancement Minor Project
+    </div>
+    <div class="footer-tags">
+      <div class="footer-tag-item"><i class="fa-brands fa-html5"></i> HTML5 Canvas</div>
+      <div class="footer-tag-item"><i class="fa-brands fa-css3-alt"></i> Progressive CSS3</div>
+      <div class="footer-tag-item"><i class="fa-brands fa-js"></i> Pure ES6+ TypedArray Engine</div>
+      <div class="footer-tag-item"><i class="fa-brands fa-node-js"></i> Node.js Server</div>
+    </div>
+  </footer>
+
+  <!-- JSZip for Client-Side Batch Cohort Export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <!-- Pure JS Medical Image Engine, DICOM Parser, Tools, CADe Triage, Metrics, Presets & App Controller -->
+  <script src="/static/js/presets.js"></script>
+  <script src="/static/js/dicom.js"></script>
+  <script src="/static/js/tools.js"></script>
+  <script src="/static/js/triage.js"></script>
+  <script src="/static/js/engine.js"></script>
+  <script src="/static/js/metrics.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

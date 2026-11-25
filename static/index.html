@@ -68,7 +68,7 @@
         <div class="dropzone" id="dropzone">
           <i class="fa-solid fa-cloud-arrow-up dropzone-icon"></i>
           <div class="dropzone-title">Upload DICOM (.dcm) or X-Ray</div>
-          <div class="dropzone-hint">16-bit DICOM, PNG, JPG, or TIFF (100% Local)</div>
+          <div class="dropzone-hint">Uncompressed monochrome DICOM Part 10, PNG, JPG, or TIFF (100% Local)</div>
           <input type="file" id="fileInput" accept="image/*,.dcm,application/dicom" style="display: none;" />
         </div>
 
@@ -507,7 +507,9 @@
 
   <!-- JSZip for Client-Side Batch Cohort Export -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <!-- Pure JS Medical Image Engine, DICOM Parser, Tools, CADe Triage, Metrics, Presets & App Controller -->
+  <!-- dicom-parser handles DICOM Part 10 structures; the adapter below decodes supported monochrome pixels. -->
+  <script src="/static/vendor/dicomParser.min.js"></script>
+  <!-- Medical Image Engine, DICOM Adapter, Tools, CADe Triage, Metrics, Presets & App Controller -->
   <script src="/static/js/presets.js"></script>
   <script src="/static/js/dicom.js"></script>
   <script src="/static/js/tools.js"></script>

@@ -13,5 +13,8 @@
     "image-enhancement",
     "html5-canvas"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "dicom-parser": "1.8.21"
+  }
 }

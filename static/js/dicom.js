@@ -1,252 +1,156 @@
-/**
- * RadVision Native 16-bit DICOM (Part 10) Parser & Windowing (WW/WL) Engine
- * Supports Explicit VR Little Endian & Implicit VR Little Endian uncompressed DICOMs.
- * Runs 100% client-side in the browser with zero external server uploads.
+/*
+ * DICOM Part 10 image adapter for RadVision.
+ * The underlying dicom-parser library handles Part 10 element encoding and
+ * transfer-syntax byte order. Pixel decoding here is intentionally limited
+ * to single-frame, single-sample, uncompressed monochrome images.
  */
-
 const DicomParser = (() => {
-  const EXPLICIT_LONG_VRS = new Set(["OB", "OW", "OF", "SQ", "UT", "UN", "OD"]);
-
-  function readAscii(view, offset, length) {
-    let str = "";
-    for (let i = 0; i < length; i++) {
-      const code = view.getUint8(offset + i);
-      if (code === 0) break;
-      str += String.fromCharCode(code);
-    }
-    return str.trim();
-  }
+  const NATIVE_TRANSFER_SYNTAXES = new Set([
+    "1.2.840.10008.1.2",       // Implicit VR Little Endian
+    "1.2.840.10008.1.2.1",     // Explicit VR Little Endian
+    "1.2.840.10008.1.2.2"      // Explicit VR Big Endian (retired)
+  ]);
 
   function isDicomBuffer(arrayBuffer) {
     if (!arrayBuffer || arrayBuffer.byteLength < 132) return false;
-    const view = new DataView(arrayBuffer);
-    return (
-      view.getUint8(128) === 0x44 && // D
-      view.getUint8(129) === 0x49 && // I
-      view.getUint8(130) === 0x43 && // C
-      view.getUint8(131) === 0x4d    // M
-    );
+    const bytes = new Uint8Array(arrayBuffer, 128, 4);
+    return bytes[0] === 0x44 && bytes[1] === 0x49 && bytes[2] === 0x43 && bytes[3] === 0x4d;
   }
 
-  /**
-   * Parse uncompressed DICOM Part 10 ArrayBuffer into metadata + raw 16-bit/8-bit pixel array
-   */
+  function stringValue(dataSet, tag, fallback = "") {
+    const value = dataSet.string(tag);
+    return value == null ? fallback : value.trim();
+  }
+
+  function numberValue(dataSet, tag, fallback) {
+    const raw = stringValue(dataSet, tag);
+    const value = Number.parseFloat(raw.split("\\")[0]);
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  function requiredUint16(dataSet, tag, label) {
+    const value = dataSet.uint16(tag);
+    if (!Number.isInteger(value)) throw new Error(`Missing or invalid DICOM ${label}.`);
+    return value;
+  }
+
   function parse(arrayBuffer) {
     if (!isDicomBuffer(arrayBuffer)) {
-      throw new Error("Invalid DICOM file: Missing 'DICM' preamble at offset 128.");
+      throw new Error("This file is not a DICOM Part 10 file (missing DICM marker).");
     }
 
-    const view = new DataView(arrayBuffer);
-    const len = arrayBuffer.byteLength;
-    let offset = 132;
-    let implicitVR = false;
-
-    const meta = {
-      patientName: "ANONYMIZED",
-      patientID: "--",
-      studyDate: "--",
-      modality: "DX",
-      bodyPart: "CHEST",
-      kvp: "--",
-      photometric: "MONOCHROME2",
-      rows: 0,
-      cols: 0,
-      pixelSpacing: [0.2, 0.2], // default fallback mm/px
-      hasCalibratedSpacing: false,
-      bitsAllocated: 16,
-      bitsStored: 12,
-      pixelRepresentation: 0,
-      windowCenter: null,
-      windowWidth: null,
-      rescaleIntercept: 0,
-      rescaleSlope: 1,
-      transferSyntax: "1.2.840.10008.1.2.1"
-    };
-
-    let pixelDataOffset = -1;
-    let pixelDataLength = 0;
-
-    while (offset + 8 <= len) {
-      const group = view.getUint16(offset, true);
-      const elem = view.getUint16(offset + 2, true);
-      offset += 4;
-
-      // Group 0x0002 (File Meta Information) is always Explicit VR Little Endian
-      const useExplicit = group === 0x0002 || !implicitVR;
-      let vr = "";
-      let vl = 0;
-
-      if (group === 0xfffe) {
-        // Sequence delimiter / item tag
-        vl = view.getUint32(offset, true);
-        offset += 4;
-        if (vl !== 0xffffffff && vl > 0 && offset + vl <= len) {
-          offset += vl;
-        }
-        continue;
-      }
-
-      if (useExplicit) {
-        vr = String.fromCharCode(view.getUint8(offset), view.getUint8(offset + 1));
-        offset += 2;
-        if (EXPLICIT_LONG_VRS.has(vr)) {
-          offset += 2; // reserved 2 bytes
-          vl = view.getUint32(offset, true);
-          offset += 4;
-        } else {
-          vl = view.getUint16(offset, true);
-          offset += 2;
-        }
-      } else {
-        vl = view.getUint32(offset, true);
-        offset += 4;
-      }
-
-      // Undefined length sequence
-      if (vl === 0xffffffff) {
-        continue;
-      }
-
-      if (offset + vl > len) break;
-
-      // Pixel Data Tag (7FE0, 0010)
-      if (group === 0x7fe0 && elem === 0x0010) {
-        pixelDataOffset = offset;
-        pixelDataLength = vl;
-        break;
-      }
-
-      // Extract relevant clinical & image tags
-      if (group === 0x0002 && elem === 0x0010) {
-        meta.transferSyntax = readAscii(view, offset, vl);
-        if (meta.transferSyntax === "1.2.840.10008.1.2") {
-          implicitVR = true;
-        }
-      } else if (group === 0x0008 && elem === 0x0020) {
-        meta.studyDate = readAscii(view, offset, vl) || "--";
-      } else if (group === 0x0008 && elem === 0x0060) {
-        meta.modality = readAscii(view, offset, vl) || "DX";
-      } else if (group === 0x0010 && elem === 0x0010) {
-        meta.patientName = readAscii(view, offset, vl) || "ANONYMIZED";
-      } else if (group === 0x0010 && elem === 0x0020) {
-        meta.patientID = readAscii(view, offset, vl) || "--";
-      } else if (group === 0x0018 && elem === 0x0015) {
-        meta.bodyPart = readAscii(view, offset, vl) || "--";
-      } else if (group === 0x0018 && elem === 0x0060) {
-        meta.kvp = readAscii(view, offset, vl) || "--";
-      } else if (group === 0x0028 && elem === 0x0004) {
-        meta.photometric = readAscii(view, offset, vl) || "MONOCHROME2";
-      } else if (group === 0x0028 && elem === 0x0010) {
-        meta.rows = view.getUint16(offset, true);
-      } else if (group === 0x0028 && elem === 0x0011) {
-        meta.cols = view.getUint16(offset, true);
-      } else if (group === 0x0028 && elem === 0x0030) {
-        const sp = readAscii(view, offset, vl).split("\\");
-        if (sp.length >= 2 && !isNaN(parseFloat(sp[0])) && !isNaN(parseFloat(sp[1]))) {
-          meta.pixelSpacing = [parseFloat(sp[0]), parseFloat(sp[1])];
-          meta.hasCalibratedSpacing = true;
-        }
-      } else if (group === 0x0028 && elem === 0x0100) {
-        meta.bitsAllocated = view.getUint16(offset, true);
-      } else if (group === 0x0028 && elem === 0x0101) {
-        meta.bitsStored = view.getUint16(offset, true);
-      } else if (group === 0x0028 && elem === 0x0103) {
-        meta.pixelRepresentation = view.getUint16(offset, true);
-      } else if (group === 0x0028 && elem === 0x1050) {
-        const val = parseFloat(readAscii(view, offset, vl).split("\\")[0]);
-        if (!isNaN(val)) meta.windowCenter = val;
-      } else if (group === 0x0028 && elem === 0x1051) {
-        const val = parseFloat(readAscii(view, offset, vl).split("\\")[0]);
-        if (!isNaN(val)) meta.windowWidth = val;
-      } else if (group === 0x0028 && elem === 0x1052) {
-        const val = parseFloat(readAscii(view, offset, vl));
-        if (!isNaN(val)) meta.rescaleIntercept = val;
-      } else if (group === 0x0028 && elem === 0x1053) {
-        const val = parseFloat(readAscii(view, offset, vl));
-        if (!isNaN(val)) meta.rescaleSlope = val;
-      }
-
-      offset += vl;
+    let dataSet;
+    try {
+      dataSet = dicomParser.parseDicom(new Uint8Array(arrayBuffer));
+    } catch (error) {
+      throw new Error(`DICOM structure could not be parsed: ${error.message}`);
     }
 
-    if (pixelDataOffset < 0 || meta.rows <= 0 || meta.cols <= 0) {
-      throw new Error("Could not locate uncompressed DICOM PixelData or image dimensions.");
+    const transferSyntax = stringValue(dataSet, "x00020010");
+    if (!NATIVE_TRANSFER_SYNTAXES.has(transferSyntax)) {
+      throw new Error(`Transfer syntax ${transferSyntax || "unknown"} is not supported for pixel decoding. Use uncompressed Implicit VR Little Endian, Explicit VR Little Endian, or Explicit VR Big Endian.`);
     }
 
-    const numPixels = meta.rows * meta.cols;
-    let rawPixels;
+    const rows = requiredUint16(dataSet, "x00280010", "Rows");
+    const cols = requiredUint16(dataSet, "x00280011", "Columns");
+    const bitsAllocated = requiredUint16(dataSet, "x00280100", "Bits Allocated");
+    const bitsStored = requiredUint16(dataSet, "x00280101", "Bits Stored");
+    const highBit = requiredUint16(dataSet, "x00280102", "High Bit");
+    const pixelRepresentation = requiredUint16(dataSet, "x00280103", "Pixel Representation");
+    const samplesPerPixel = requiredUint16(dataSet, "x00280002", "Samples per Pixel");
+    const photometric = stringValue(dataSet, "x00280004", "MONOCHROME2");
+    const numberOfFrames = Number.parseInt(stringValue(dataSet, "x00280008", "1"), 10);
 
-    if (meta.bitsAllocated === 16) {
-      rawPixels = new Float32Array(numPixels);
-      const mask = meta.bitsStored < 16 ? (1 << meta.bitsStored) - 1 : 0xffff;
-      for (let i = 0; i < numPixels; i++) {
-        const byteIdx = pixelDataOffset + i * 2;
-        if (byteIdx + 1 >= len) break;
-        let val = meta.pixelRepresentation === 1
-          ? view.getInt16(byteIdx, true)
-          : (view.getUint16(byteIdx, true) & mask);
-        rawPixels[i] = val * meta.rescaleSlope + meta.rescaleIntercept;
-      }
-    } else {
-      rawPixels = new Float32Array(numPixels);
-      for (let i = 0; i < numPixels; i++) {
-        if (pixelDataOffset + i >= len) break;
-        const val = view.getUint8(pixelDataOffset + i);
-        rawPixels[i] = val * meta.rescaleSlope + meta.rescaleIntercept;
-      }
+    if (rows <= 0 || cols <= 0) throw new Error("DICOM Rows and Columns must be positive.");
+    if (![8, 16].includes(bitsAllocated) || bitsStored < 1 || bitsStored > bitsAllocated || highBit >= bitsAllocated || highBit + 1 < bitsStored) {
+      throw new Error(`Unsupported pixel encoding: ${bitsStored} stored bits in ${bitsAllocated} allocated bits.`);
+    }
+    if (![0, 1].includes(pixelRepresentation)) throw new Error("Pixel Representation must be unsigned (0) or signed (1).");
+    if (samplesPerPixel !== 1 || !["MONOCHROME1", "MONOCHROME2"].includes(photometric)) {
+      throw new Error("This viewer supports monochrome single-sample images only.");
+    }
+    if (numberOfFrames !== 1) throw new Error("Multi-frame DICOM images are not supported by this viewer yet.");
+
+    const pixelDataElement = dataSet.elements.x7fe00010;
+    if (!pixelDataElement || pixelDataElement.encapsulatedPixelData) {
+      throw new Error("The DICOM file has no native, uncompressed Pixel Data.");
+    }
+    const pixelCount = rows * cols;
+    const bytesPerPixel = bitsAllocated / 8;
+    if (pixelDataElement.length < pixelCount * bytesPerPixel) {
+      throw new Error("DICOM Pixel Data is shorter than the declared image dimensions require.");
     }
 
-    // Compute min/max and default WL/WW if absent
-    let minVal = Infinity;
-    let maxVal = -Infinity;
+    const shift = highBit + 1 - bitsStored;
+    const valueMask = bitsStored === 16 ? 0xffff : (1 << bitsStored) - 1;
+    const signBit = 1 << (bitsStored - 1);
+    const rawPixels = new Float32Array(pixelCount);
+    const slope = numberValue(dataSet, "x00281053", 1);
+    const intercept = numberValue(dataSet, "x00281052", 0);
+
+    for (let i = 0; i < pixelCount; i++) {
+      let stored = bitsAllocated === 16 ? dataSet.uint16("x7fe00010", i) : dataSet.uint8("x7fe00010", i);
+      stored = (stored >>> shift) & valueMask;
+      if (pixelRepresentation === 1 && (stored & signBit)) stored -= 1 << bitsStored;
+      rawPixels[i] = stored * slope + intercept;
+    }
+
+    let minPixel = Infinity;
+    let maxPixel = -Infinity;
     for (let i = 0; i < rawPixels.length; i++) {
-      if (rawPixels[i] < minVal) minVal = rawPixels[i];
-      if (rawPixels[i] > maxVal) maxVal = rawPixels[i];
+      minPixel = Math.min(minPixel, rawPixels[i]);
+      maxPixel = Math.max(maxPixel, rawPixels[i]);
     }
 
-    if (meta.windowWidth === null || meta.windowCenter === null) {
-      meta.windowWidth = Math.max(1, Math.round(maxVal - minVal));
-      meta.windowCenter = Math.round((maxVal + minVal) / 2);
-    }
-
-    meta.minPixel = Math.round(minVal);
-    meta.maxPixel = Math.round(maxVal);
-
-    return {
-      meta,
-      rawPixels,
-      width: meta.cols,
-      height: meta.rows
+    const windowCenter = numberValue(dataSet, "x00281050", (minPixel + maxPixel) / 2);
+    const windowWidth = numberValue(dataSet, "x00281051", Math.max(1, maxPixel - minPixel));
+    const spacing = stringValue(dataSet, "x00280030").split("\\").map(Number);
+    const hasCalibratedSpacing = spacing.length >= 2 && spacing.every(Number.isFinite) && spacing[0] > 0 && spacing[1] > 0;
+    const meta = {
+      patientName: stringValue(dataSet, "x00100010", "ANONYMIZED"),
+      patientID: stringValue(dataSet, "x00100020", "--"),
+      studyDate: stringValue(dataSet, "x00080020", "--"),
+      modality: stringValue(dataSet, "x00080060", "--"),
+      bodyPart: stringValue(dataSet, "x00180015", "--"),
+      kvp: stringValue(dataSet, "x00180060", "--"),
+      photometric,
+      rows,
+      cols,
+      pixelSpacing: hasCalibratedSpacing ? spacing.slice(0, 2) : [0, 0],
+      hasCalibratedSpacing,
+      bitsAllocated,
+      bitsStored,
+      pixelRepresentation,
+      windowCenter,
+      windowWidth,
+      rescaleIntercept: intercept,
+      rescaleSlope: slope,
+      transferSyntax,
+      minPixel: Math.round(minPixel),
+      maxPixel: Math.round(maxPixel)
     };
+
+    return { meta, rawPixels, width: cols, height: rows };
   }
 
-  /**
-   * Apply DICOM Window Width (WW) & Window Level (WL) mapping to 8-bit grayscale buffer
-   * Supports Photometric Inversion (MONOCHROME1 <-> MONOCHROME2)
-   */
+  // DICOM PS3.3 C.11.2 LINEAR VOI LUT function, including its W=1 threshold case.
   function applyWindowLevel(rawPixels, windowCenter, windowWidth, invert = false) {
-    const len = rawPixels.length;
-    const out = new Uint8Array(len);
-    const ww = Math.max(1, windowWidth);
-    const low = windowCenter - ww / 2;
-    const high = windowCenter + ww / 2;
-    const scale = 255.0 / ww;
-
-    for (let i = 0; i < len; i++) {
-      const v = rawPixels[i];
+    const output = new Uint8Array(rawPixels.length);
+    const width = Math.max(1, windowWidth);
+    const center = windowCenter;
+    const lower = center - 0.5 - (width - 1) / 2;
+    const upper = center - 0.5 + (width - 1) / 2;
+    for (let i = 0; i < rawPixels.length; i++) {
+      const value = rawPixels[i];
       let mapped;
-      if (v <= low) mapped = 0;
-      else if (v >= high) mapped = 255;
-      else mapped = Math.round((v - low) * scale);
-
-      out[i] = invert ? 255 - mapped : mapped;
+      if (width === 1) mapped = value <= center - 0.5 ? 0 : 255;
+      else if (value <= lower) mapped = 0;
+      else if (value > upper) mapped = 255;
+      else mapped = Math.round(((value - (center - 0.5)) / (width - 1) + 0.5) * 255);
+      output[i] = invert ? 255 - mapped : mapped;
     }
-    return out;
+    return output;
   }
 
-  return {
-    isDicomBuffer,
-    parse,
-    applyWindowLevel
-  };
+  return { isDicomBuffer, parse, applyWindowLevel };
 })();

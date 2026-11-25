@@ -7,7 +7,13 @@
 
 ## 📌 1. Project Overview
 
-In clinical radiography (X-rays), raw detector scans frequently suffer from low contrast, quantum mottle noise, and obscured fine anatomical details. **RadVision** is a progressive, client-side medical image workstation that accepts **any X-ray set** (single scans or multi-file cohorts), executes clinical enhancement algorithms directly in the browser using HTML5 Canvas and `Uint8Array` / `Float32Array` buffers, and displays quantitative Image Quality Assessment (IQA) metrics in real time.
+In clinical radiography (X-rays), raw detector scans frequently suffer from low contrast, quantum mottle noise, and obscured fine anatomical details. **RadVision** is a client-side image processing demo that accepts common raster images and a limited DICOM image subset, executes enhancement algorithms in the browser, and displays quantitative Image Quality Assessment (IQA) metrics.
+
+### DICOM compatibility
+
+RadVision uses `dicom-parser` to read DICOM Part 10 file structure. Pixel rendering supports single-frame, single-sample monochrome images encoded with uncompressed Implicit VR Little Endian, Explicit VR Little Endian, or Explicit VR Big Endian transfer syntaxes. It interprets stored-bit alignment, signed pixels, rescale slope/intercept, pixel spacing, MONOCHROME1 inversion, and the DICOM LINEAR window function.
+
+Compressed transfer syntaxes (including JPEG, JPEG-LS, JPEG 2000, RLE, and deflate), color images, multi-frame objects, raw datasets without a Part 10 wrapper, DICOMDIR, writing DICOM objects, and DICOM network / DICOMweb services are not supported. Batch processing exports enhanced PNG images and a CSV report; it does not write modified DICOM instances. This project does not claim complete DICOM conformance or clinical/PACS interoperability.
 
 ---
 

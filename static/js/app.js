@@ -1,13 +1,12 @@
 /**
- * RadVision Clinical Medical Radiography Workstation Controller
- * Integrates: 16-bit DICOM Parser, WW/WL Windowing, Pure JS Enhancement Engine,
- * Calibrated Anatomical Measurements, CADe Triage Heatmap, & Clinical Reporting.
+ * RadVision image enhancement demo controller.
+ * Integrates DICOM windowing, image enhancement, comparison, and measurement tools.
  */
 
 const state = {
-  currentSampleId: "chest_pa_real_1",
-  currentPresetId: "pulmonary_chest",
-  currentImageSource: "/static/samples/chest_pa_real_1.jpg",
+  currentSampleId: "pelvis_hip_ap",
+  currentPresetId: "balanced",
+  currentImageSource: "/static/samples/pelvis_hip_ap.png",
   isDicom: false,
   dicomMeta: null,
   rawPixels: null, // Float32Array (from DICOM) or Uint8Array (from standard image)
@@ -19,9 +18,6 @@ const state = {
   invertPhotometric: false,
   originalImageSrc: "",
   enhancedImageSrc: "",
-  triageResult: null,
-  showTriage: false,
-  triageOpacity: 0.55,
   viewMode: "split",
   splitPosition: 50,
   zoomLevel: 1.0,
@@ -32,7 +28,7 @@ const state = {
   isDrawingTool: false,
   metrics: null,
   batchFiles: [],
-  customParams: { ...CLINICAL_PRESETS[0].pipeline }
+  customParams: { ...IMAGE_PRESETS[0].pipeline }
 };
 
 const elements = {
@@ -52,7 +48,6 @@ const elements = {
   imgEnhanced: document.getElementById("imgEnhanced"),
   imgDualOrig: document.getElementById("imgDualOrig"),
   imgDualEnh: document.getElementById("imgDualEnh"),
-  triageHeatmapImg: document.getElementById("triageHeatmapImg"),
   annotationCanvas: document.getElementById("annotationCanvas"),
   overlayLayer: document.getElementById("overlayLayer"),
   splitHandle: document.getElementById("splitHandle"),
@@ -69,40 +64,30 @@ const elements = {
   // View & Actions
   btnModeSplit: document.getElementById("btnModeSplit"),
   btnModeDual: document.getElementById("btnModeDual"),
-  btnModeEnh: document.getElementById("btnModeEnh"),
   btnZoomIn: document.getElementById("btnZoomIn"),
   btnZoomOut: document.getElementById("btnZoomOut"),
   btnZoomReset: document.getElementById("btnZoomReset"),
   btnDownload: document.getElementById("btnDownload"),
-  btnClinicalReport: document.getElementById("btnClinicalReport"),
+  btnEnhancementSummary: document.getElementById("btnEnhancementSummary"),
 
-  // Clinical Measurement Tools
+  // Measurement tools
   toolNone: document.getElementById("toolNone"),
   toolRuler: document.getElementById("toolRuler"),
   toolAngle: document.getElementById("toolAngle"),
-  toolCtr: document.getElementById("toolCtr"),
   toolRoi: document.getElementById("toolRoi"),
   btnInvert: document.getElementById("btnInvert"),
   btnClearTools: document.getElementById("btnClearTools"),
 
   // Metrics & Histogram
-  valPsnr: document.getElementById("valPsnr"),
-  valSsim: document.getElementById("valSsim"),
   valCii: document.getElementById("valCii"),
   valEntropy: document.getElementById("valEntropy"),
   histCanvas: document.getElementById("histCanvas"),
 
-  // WW/WL & Triage
+  // DICOM window / level
   sliderWl: document.getElementById("sliderWl"),
   valWl: document.getElementById("valWl"),
   sliderWw: document.getElementById("sliderWw"),
   valWw: document.getElementById("valWw"),
-  toggleTriage: document.getElementById("toggleTriage"),
-  sliderTriageOpacity: document.getElementById("sliderTriageOpacity"),
-  valTriageOpacity: document.getElementById("valTriageOpacity"),
-  valTriageAsym: document.getElementById("valTriageAsym"),
-  valTriageHotspots: document.getElementById("valTriageHotspots"),
-  triageSummary: document.getElementById("triageSummary"),
 
   // Custom Studio Controls
   selectDenoise: document.getElementById("selectDenoise"),
@@ -123,7 +108,9 @@ const elements = {
   batchTableBody: document.getElementById("batchTableBody"),
   btnLoadSampleCohort: document.getElementById("btnLoadSampleCohort"),
   btnProcessBatch: document.getElementById("btnProcessBatch"),
-  batchCountPill: document.getElementById("batchCountPill")
+  batchCountPill: document.getElementById("batchCountPill"),
+  sampleCountBadge: document.getElementById("sampleCountBadge"),
+  cohortSampleCount: document.getElementById("cohortSampleCount")
 };
 
 function loadImageToCanvas(src) {
@@ -175,7 +162,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderSampleList();
   renderPresetGrid();
   syncControlsFromParams(state.customParams);
-  loadStandardImageAndProcess(state.currentImageSource, "DX", "CHEST");
+  loadStandardImageAndProcess(state.currentImageSource, "IMG", "SYNTHETIC");
 });
 
 function initEventListeners() {
@@ -226,7 +213,6 @@ function initEventListeners() {
   // View Modes & Zoom
   elements.btnModeSplit.addEventListener("click", () => setViewMode("split"));
   elements.btnModeDual.addEventListener("click", () => setViewMode("dual"));
-  elements.btnModeEnh.addEventListener("click", () => setViewMode("enhanced"));
 
   elements.btnZoomIn.addEventListener("click", () => changeZoom(0.2));
   elements.btnZoomOut.addEventListener("click", () => changeZoom(-0.2));
@@ -258,12 +244,11 @@ function initEventListeners() {
     changeZoom(e.deltaY < 0 ? 0.15 : -0.15);
   }, { passive: false });
 
-  // Clinical Measurement Tools
-  elements.toolNone.addEventListener("click", () => selectClinicalTool("none"));
-  elements.toolRuler.addEventListener("click", () => selectClinicalTool("ruler"));
-  elements.toolAngle.addEventListener("click", () => selectClinicalTool("angle"));
-  elements.toolCtr.addEventListener("click", () => selectClinicalTool("ctr"));
-  elements.toolRoi.addEventListener("click", () => selectClinicalTool("roi"));
+  // Measurement tools
+  elements.toolNone.addEventListener("click", () => selectMeasurementTool("none"));
+  elements.toolRuler.addEventListener("click", () => selectMeasurementTool("ruler"));
+  elements.toolAngle.addEventListener("click", () => selectMeasurementTool("angle"));
+  elements.toolRoi.addEventListener("click", () => selectMeasurementTool("roi"));
   elements.btnClearTools.addEventListener("click", () => {
     AnnotationTools.clearAll();
     redrawAnnotations();
@@ -312,23 +297,9 @@ function initEventListeners() {
   });
   elements.sliderWw.addEventListener("change", () => recomputeFromRawPixels());
 
-  // CADe Triage Controls
-  elements.toggleTriage.addEventListener("change", (e) => {
-    state.showTriage = e.target.checked;
-    elements.triageHeatmapImg.style.opacity = state.showTriage ? state.triageOpacity : 0;
-  });
-  elements.sliderTriageOpacity.addEventListener("input", (e) => {
-    const val = parseInt(e.target.value, 10);
-    state.triageOpacity = val / 100;
-    elements.valTriageOpacity.textContent = `${val}%`;
-    if (state.showTriage) {
-      elements.triageHeatmapImg.style.opacity = state.triageOpacity;
-    }
-  });
-
   // Exports
   elements.btnDownload.addEventListener("click", downloadEnhancedSnapshot);
-  elements.btnClinicalReport.addEventListener("click", generateClinicalReport);
+  elements.btnEnhancementSummary.addEventListener("click", generateEnhancementSummary);
 
   // Studio Controls
   elements.sliderClaheClip.addEventListener("input", (e) => {
@@ -387,10 +358,10 @@ function getNormalizedPoint(e) {
   };
 }
 
-function selectClinicalTool(tool) {
+function selectMeasurementTool(tool) {
   AnnotationTools.setTool(tool);
-  [elements.toolNone, elements.toolRuler, elements.toolAngle, elements.toolCtr, elements.toolRoi].forEach(b => b.classList.remove("active"));
-  const map = { none: elements.toolNone, ruler: elements.toolRuler, angle: elements.toolAngle, ctr: elements.toolCtr, roi: elements.toolRoi };
+  [elements.toolNone, elements.toolRuler, elements.toolAngle, elements.toolRoi].forEach(b => b.classList.remove("active"));
+  const map = { none: elements.toolNone, ruler: elements.toolRuler, angle: elements.toolAngle, roi: elements.toolRoi };
   if (map[tool]) map[tool].classList.add("active");
 
   elements.annotationCanvas.classList.toggle("interactive", tool !== "none");
@@ -423,11 +394,15 @@ function switchNavTab(tab) {
 
 function renderSampleList() {
   elements.sampleList.innerHTML = "";
+  elements.sampleCountBadge.textContent = `${SAMPLE_XRAYS.length} samples`;
+  elements.cohortSampleCount.textContent = SAMPLE_XRAYS.length;
   SAMPLE_XRAYS.forEach(sample => {
     const div = document.createElement("div");
     div.className = `sample-item ${sample.id === state.currentSampleId ? "active" : ""}`;
     div.innerHTML = `
-      <img src="${sample.url}" alt="${sample.name}" class="sample-thumb" />
+      ${sample.isDicom
+        ? '<div class="sample-thumb sample-thumb-placeholder"><i class="fa-regular fa-file-image"></i></div>'
+        : `<img src="${sample.url}" alt="${sample.name}" class="sample-thumb" />`}
       <div class="sample-info">
         <div class="sample-name">${sample.name}</div>
         <div class="sample-desc">${sample.condition}</div>
@@ -443,7 +418,14 @@ function renderSampleList() {
       if (sample.recommended_preset) {
         selectPreset(sample.recommended_preset, false);
       }
-      loadStandardImageAndProcess(sample.url, "DX", sample.type.toUpperCase());
+      if (sample.isDicom) {
+        fetch(sample.url).then(response => {
+          if (!response.ok) throw new Error(`Unable to load sample (${response.status}).`);
+          return response.arrayBuffer();
+        }).then(buffer => loadDicomBufferAndProcess(buffer, sample.name)).catch(err => alert(`Sample load failed: ${err.message}`));
+      } else {
+        loadStandardImageAndProcess(sample.url, "IMG", sample.type.toUpperCase());
+      }
     });
     elements.sampleList.appendChild(div);
   });
@@ -451,7 +433,7 @@ function renderSampleList() {
 
 function renderPresetGrid() {
   elements.presetContainer.innerHTML = "";
-  CLINICAL_PRESETS.forEach(p => {
+  IMAGE_PRESETS.forEach(p => {
     const card = document.createElement("div");
     card.className = `preset-card ${p.id === state.currentPresetId ? "active" : ""}`;
     card.id = `preset-${p.id}`;
@@ -490,7 +472,7 @@ function selectPreset(presetId, shouldRun = true) {
   const targetCard = document.getElementById(`preset-${presetId}`);
   if (targetCard) targetCard.classList.add("active");
 
-  const preset = CLINICAL_PRESETS.find(p => p.id === presetId);
+  const preset = IMAGE_PRESETS.find(p => p.id === presetId);
   if (preset) {
     state.customParams = { ...preset.pipeline };
     syncControlsFromParams(state.customParams);
@@ -562,19 +544,16 @@ function loadDicomBufferAndProcess(arrayBuffer, filename) {
 }
 
 async function loadStandardImageAndProcess(src, modality = "DX", bodyPart = "CHEST") {
-  setLoading(true, "Loading Radiograph into Clinical Viewport...");
+  setLoading(true, "Loading image...");
   try {
     const { imageData, width, height } = await loadImageToCanvas(src);
     const grayObj = MedEngine.toGrayscale(imageData);
 
     state.isDicom = false;
     state.dicomMeta = {
-      patientName: "REFERENCE CASE",
-      patientID: state.currentSampleId || "LOCAL-SCAN",
-      studyDate: new Date().toISOString().slice(0, 10),
       modality,
       bodyPart,
-      pixelSpacing: [0.2, 0.2],
+      pixelSpacing: null,
       hasCalibratedSpacing: false
     };
     state.rawPixels = grayObj.data;
@@ -597,7 +576,7 @@ async function loadStandardImageAndProcess(src, modality = "DX", bodyPart = "CHE
     elements.valWw.textContent = "255";
     elements.bitDepthBadge.textContent = "8-Bit";
 
-    AnnotationTools.setCalibration([0.2, 0.2], false);
+    AnnotationTools.setCalibration(null, false);
     updateHud();
     recomputeFromRawPixels();
   } catch (err) {
@@ -613,13 +592,14 @@ function updateHud() {
   elements.hudModality.textContent = m.modality || "DX";
   elements.hudBodyPart.textContent = m.bodyPart || "--";
   elements.hudWlWw.textContent = `${Math.round(state.windowCenter)} / ${Math.round(state.windowWidth)}`;
-  const sp = m.pixelSpacing ? m.pixelSpacing[0].toFixed(2) : "0.20";
-  elements.hudSpacing.textContent = m.hasCalibratedSpacing ? `${sp} mm/px` : `${sp} mm/px (est)`;
+  elements.hudSpacing.textContent = m.hasCalibratedSpacing
+    ? `${m.pixelSpacing[0]} × ${m.pixelSpacing[1]} mm/px`
+    : "Pixels (uncalibrated)";
 }
 
 function recomputeFromRawPixels() {
   if (!state.rawPixels) return;
-  setLoading(true, "Running Enhancement Pipeline & CADe Triage...");
+  setLoading(true, "Enhancing image...");
 
   setTimeout(() => {
     try {
@@ -638,21 +618,12 @@ function recomputeFromRawPixels() {
       const origImageData = MedEngine.toImageData(base8, w, h, false);
       const origUrl = imageDataToDataURL(origImageData);
 
-      // 2. Run Clinical Enhancement Pipeline
+      // 2. Run the image enhancement pipeline
       const { enhancedGray, outputImageData } = MedEngine.processPipeline(base8, w, h, state.customParams);
       const enhUrl = imageDataToDataURL(outputImageData);
 
-      // 3. Compute IQA Metrics
-      const metrics = MedMetrics.evaluateAll(base8, enhancedGray, w, h);
-
-      // 4. Compute CADe Triage Heatmap
-      const triage = CadeTriage.analyze(enhancedGray, w, h);
-      state.triageResult = triage;
-      elements.triageHeatmapImg.src = imageDataToDataURL(triage.heatmapImageData);
-      elements.triageHeatmapImg.style.opacity = state.showTriage ? state.triageOpacity : 0;
-      elements.valTriageAsym.textContent = `${triage.asymmetryPercent}%`;
-      elements.valTriageHotspots.textContent = `${triage.hotspotCount}`;
-      elements.triageSummary.textContent = `${triage.summary} (Triage aid only, not a standalone diagnosis.)`;
+      // 3. Compute image statistics for the histogram and contrast summary
+      const metrics = MedMetrics.evaluateDisplayStats(base8, enhancedGray, w, h);
 
       state.originalImageSrc = origUrl;
       state.enhancedImageSrc = enhUrl;
@@ -678,8 +649,6 @@ function recomputeFromRawPixels() {
 
 function updateMetricCards(m) {
   if (!m) return;
-  elements.valPsnr.textContent = `${m.psnr.toFixed(1)} dB`;
-  elements.valSsim.textContent = m.ssim.toFixed(4);
   elements.valCii.textContent = `${m.cii.toFixed(2)}x`;
   const delta = m.entropy_delta;
   elements.valEntropy.textContent = `${delta >= 0 ? "+" : ""}${delta.toFixed(3)} b/p`;
@@ -750,21 +719,15 @@ function setViewMode(mode) {
   state.viewMode = mode;
   elements.btnModeSplit.classList.toggle("active", mode === "split");
   elements.btnModeDual.classList.toggle("active", mode === "dual");
-  elements.btnModeEnh.classList.toggle("active", mode === "enhanced");
 
   if (mode === "split") {
     elements.compareContainer.style.display = "flex";
     elements.dualContainer.style.display = "none";
     elements.splitHandle.style.display = "block";
     updateSplitPosition(elements.compareContainer.offsetWidth * 0.5, elements.compareContainer.offsetWidth);
-  } else if (mode === "dual") {
+  } else {
     elements.compareContainer.style.display = "none";
     elements.dualContainer.style.display = "grid";
-  } else {
-    elements.compareContainer.style.display = "flex";
-    elements.dualContainer.style.display = "none";
-    elements.splitHandle.style.display = "none";
-    elements.overlayLayer.style.clipPath = "polygon(0 0, 100% 0, 100% 100%, 0 100%)";
   }
 }
 
@@ -788,7 +751,6 @@ function applyTransform() {
   const transform = `scale(${state.zoomLevel}) translate(${state.panX / state.zoomLevel}px, ${state.panY / state.zoomLevel}px)`;
   elements.imgOriginal.style.transform = transform;
   elements.imgEnhanced.style.transform = transform;
-  elements.triageHeatmapImg.style.transform = transform;
   elements.annotationCanvas.style.transform = transform;
   elements.imgDualOrig.style.transform = transform;
   elements.imgDualEnh.style.transform = transform;
@@ -804,90 +766,35 @@ function downloadEnhancedSnapshot() {
   document.body.removeChild(link);
 }
 
-/**
- * Generate Printable Clinical Radiology Report in a new tab
- */
-function generateClinicalReport() {
+function generateEnhancementSummary() {
   if (!state.originalImageSrc || !state.enhancedImageSrc) return;
-  const meta = state.dicomMeta || {};
-  const m = state.metrics || {};
-  const triage = state.triageResult || {};
+  const preset = IMAGE_PRESETS.find(item => item.id === state.currentPresetId);
+  const metrics = state.metrics || {};
   const measurements = AnnotationTools.getAnnotationsSummary();
-
-  const reportHtml = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>RadVision Clinical Enhancement Report</title>
-      <style>
-        body { font-family: 'Segoe UI', Arial, sans-serif; color: #0f172a; max-width: 960px; margin: 30px auto; padding: 20px; }
-        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 20px; }
-        .title { font-size: 22px; font-weight: 800; color: #0369a1; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
-        .box { border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px; background: #f8fafc; }
-        .box h3 { margin: 0 0 10px; font-size: 14px; text-transform: uppercase; color: #334155; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; }
-        .row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
-        .images { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
-        .img-card { background: #000; padding: 10px; border-radius: 8px; text-align: center; color: #fff; }
-        .img-card img { max-width: 100%; max-height: 360px; object-fit: contain; }
-        .disclaimer { margin-top: 24px; font-size: 11px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 10px; }
-        @media print { .no-print { display: none; } }
-      </style>
-    </head>
-    <body>
-      <div class="header">
-        <div>
-          <div class="title">RADVISION CLINICAL RADIOGRAPHY REPORT</div>
-          <div style="font-size: 12px; color: #475569;">Generated: ${new Date().toLocaleString()}</div>
-        </div>
-        <button class="no-print" onclick="window.print()" style="padding: 8px 16px; background: #0284c7; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">Print / Save PDF</button>
-      </div>
-      <div class="grid">
-        <div class="box">
-          <h3>Study &amp; DICOM Metadata</h3>
-          <div class="row"><span>Patient / Ref ID:</span><strong>${meta.patientName || "N/A"} (${meta.patientID || "--"})</strong></div>
-          <div class="row"><span>Modality / Body Part:</span><strong>${meta.modality || "DX"} / ${meta.bodyPart || "--"}</strong></div>
-          <div class="row"><span>Dimensions:</span><strong>${state.imgWidth} &times; ${state.imgHeight} px</strong></div>
-          <div class="row"><span>Window Level / Width:</span><strong>${Math.round(state.windowCenter)} / ${Math.round(state.windowWidth)}</strong></div>
-          <div class="row"><span>Pixel Spacing:</span><strong>${meta.pixelSpacing ? meta.pixelSpacing[0].toFixed(3) : "0.200"} mm/px</strong></div>
-        </div>
-        <div class="box">
-          <h3>Enhancement &amp; IQA Benchmarks</h3>
-          <div class="row"><span>Applied Preset:</span><strong>${state.currentPresetId}</strong></div>
-          <div class="row"><span>PSNR / SSIM:</span><strong>${m.psnr} dB / ${m.ssim}</strong></div>
-          <div class="row"><span>Contrast Index (CII):</span><strong>${m.cii}x</strong></div>
-          <div class="row"><span>Entropy Gain:</span><strong>${m.entropy_delta >= 0 ? "+" : ""}${m.entropy_delta} bits/px</strong></div>
-          <div class="row"><span>CADe Triage Asymmetry:</span><strong>${triage.asymmetryPercent ?? "--"}% (${triage.hotspotCount ?? 0} hotspots)</strong></div>
-        </div>
-      </div>
-      <div class="box">
-        <h3>Anatomical Measurements &amp; Findings</h3>
-        <div style="font-size: 13px;">
-          ${measurements.length > 0 ? measurements.map(item => `<div>&bull; ${item}</div>`).join("") : "<div>No manual ruler/angle/CTR measurements recorded.</div>"}
-          <div style="margin-top: 8px; color: #b45309;"><strong>CADe Triage Note:</strong> ${triage.summary || "N/A"}</div>
-        </div>
-      </div>
-      <div class="images">
-        <div class="img-card">
-          <img src="${state.originalImageSrc}" />
-          <div style="font-size: 12px; margin-top: 6px;">Original / Windowed Radiograph</div>
-        </div>
-        <div class="img-card">
-          <img src="${state.enhancedImageSrc}" />
-          <div style="font-size: 12px; margin-top: 6px;">Enhanced Clinical Result</div>
-        </div>
-      </div>
-      <div class="disclaimer">
-        <strong>Clinical Notice:</strong> This report was generated locally in the browser using RadVision. Image enhancement and CADe triage overlays are intended as visual decision-support aids and must be interpreted alongside unaltered source radiographs by a qualified clinician.
-      </div>
-    </body>
-    </html>
-  `;
-
+  const spacing = state.dicomMeta?.hasCalibratedSpacing
+    ? `${state.dicomMeta.pixelSpacing[0]} × ${state.dicomMeta.pixelSpacing[1]} mm/px`
+    : "Uncalibrated (measurements use pixels)";
+  const rows = [
+    ["Image dimensions", `${state.imgWidth} × ${state.imgHeight} pixels`],
+    ["Preset", preset?.name || "Custom settings"],
+    ["Window center / width", `${Math.round(state.windowCenter)} / ${Math.round(state.windowWidth)}`],
+    ["Pixel spacing", spacing],
+    ["Contrast change", `${Number(metrics.cii || 0).toFixed(2)}×`]
+  ];
+  const summaryHtml = `
+    <!doctype html><html><head><meta charset="utf-8"><title>Enhancement Summary</title>
+    <style>body{font:16px system-ui,sans-serif;color:#172033;max-width:760px;margin:40px auto;padding:0 24px}header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #ccd3df;padding-bottom:16px}h1{font-size:24px;margin:0}.row{display:flex;justify-content:space-between;gap:24px;padding:12px 0;border-bottom:1px solid #e3e7ee}.images{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px}.images img{width:100%;object-fit:contain;background:#111}.note{color:#586174;font-size:13px;margin-top:24px}@media print{button{display:none}}</style>
+    </head><body><header><h1>Enhancement Summary</h1><button onclick="window.print()">Print / Save PDF</button></header>
+    <p>Image-processing settings and measurements from this RadVision demo.</p>
+    ${rows.map(([label, value]) => `<div class="row"><span>${label}</span><strong>${value}</strong></div>`).join("")}
+    <h2>Measurements</h2><div>${measurements.length ? measurements.map(item => `<div class="row">${item}</div>`).join("") : "No measurements recorded."}</div>
+    <div class="images"><img src="${state.originalImageSrc}" alt="Original image"><img src="${state.enhancedImageSrc}" alt="Enhanced image"></div>
+    <p class="note">This is an image-processing demo summary, not a diagnostic report. Enhancement can change image appearance.</p>
+    </body></html>`;
   const win = window.open("", "_blank");
   if (win) {
     win.document.open();
-    win.document.write(reportHtml);
+    win.document.write(summaryHtml);
     win.document.close();
   }
 }
@@ -906,17 +813,15 @@ function setLoading(isLoading, text = "Processing...") {
 // ==========================================================================
 function loadBatchFiles(files) {
   state.batchFiles = files;
-  elements.batchCountPill.textContent = `${files.length} Scans Loaded`;
+  elements.batchCountPill.textContent = `${files.length} images loaded`;
   elements.batchTableBody.innerHTML = "";
   files.forEach((f, idx) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>#${idx + 1}</td>
+      <td>${idx + 1}</td>
       <td><strong>${f.name}</strong></td>
       <td>${(f.size / 1024).toFixed(1)} KB</td>
       <td><span class="badge-tag">Queued</span></td>
-      <td>--</td>
-      <td>--</td>
       <td>--</td>
     `;
     elements.batchTableBody.appendChild(tr);
@@ -925,7 +830,7 @@ function loadBatchFiles(files) {
 }
 
 async function loadBuiltInSampleCohort() {
-  setLoading(true, "Loading 8 Built-In Clinical Datasets into Cohort...");
+  setLoading(true, `Loading ${SAMPLE_XRAYS.length} generated sample images...`);
   try {
     const loadedFiles = [];
     for (const s of SAMPLE_XRAYS) {
@@ -945,11 +850,11 @@ async function loadBuiltInSampleCohort() {
 async function processBatchCohort() {
   if (!state.batchFiles || state.batchFiles.length === 0) return;
 
-  setLoading(true, `Processing Cohort (${state.batchFiles.length} Scans) Locally...`);
+  setLoading(true, `Processing ${state.batchFiles.length} images locally...`);
   const zip = new JSZip();
-  const folder = zip.folder("enhanced_scans");
+  const folder = zip.folder("enhanced_images");
   const csvRows = [
-    "Filename,Modality,Width,Height,PSNR (dB),SSIM,Contrast Improvement Index (CII),Entropy Gain,CADe Hotspots"
+    "Filename,Modality,Width,Height,Contrast Change (CII)"
   ];
 
   const rows = elements.batchTableBody.querySelectorAll("tr");
@@ -981,22 +886,19 @@ async function processBatchCohort() {
       }
 
       const { enhancedGray, outputImageData } = MedEngine.processPipeline(base8, width, height, state.customParams);
-      const m = MedMetrics.evaluateAll(base8, enhancedGray, width, height);
-      const triage = CadeTriage.analyze(enhancedGray, width, height);
+      const m = MedMetrics.evaluateDisplayStats(base8, enhancedGray, width, height);
       const blob = await imageDataToBlob(outputImageData);
 
       const baseName = file.name.replace(/\.[^/.]+$/, "");
       folder.file(`enhanced_${baseName}.png`, blob);
 
       csvRows.push(
-        `"${file.name}",${modality},${width},${height},${m.psnr},${m.ssim},${m.cii},${m.entropy_delta},${triage.hotspotCount}`
+        `"${file.name}",${modality},${width},${height},${m.cii}`
       );
 
       if (rows[i]) {
         rows[i].children[3].innerHTML = '<span class="badge-tag" style="color: var(--accent-teal); border-color: rgba(0, 230, 168, 0.4);">Completed</span>';
-        rows[i].children[4].textContent = `${m.psnr.toFixed(1)} dB`;
-        rows[i].children[5].textContent = m.ssim.toFixed(4);
-        rows[i].children[6].textContent = `${m.cii.toFixed(2)}x`;
+        rows[i].children[4].textContent = `${m.cii.toFixed(2)}×`;
       }
     } catch (err) {
       if (rows[i]) {
@@ -1005,13 +907,13 @@ async function processBatchCohort() {
     }
   }
 
-  zip.file("analysis_report.csv", csvRows.join("\n"));
+  zip.file("processing_summary.csv", csvRows.join("\n"));
   const zipBlob = await zip.generateAsync({ type: "blob" });
 
   const url = URL.createObjectURL(zipBlob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `RadVision_Clinical_Cohort_${Date.now()}.zip`;
+  a.download = `RadVision_Image_Batch_${Date.now()}.zip`;
   document.body.appendChild(a);
   a.click();
   URL.revokeObjectURL(url);

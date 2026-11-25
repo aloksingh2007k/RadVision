@@ -1,6 +1,6 @@
 /* ==========================================================================
-   RadVision Medical Workstation - Progressive Themed Dark UI Stylesheet
-   Modern Glassmorphism, Deep Obsidian, Medical Cyan/Teal Accents
+   RadVision image enhancement demo - progressive dark theme
+   Modern Glassmorphism, Deep Obsidian, Cyan/Teal Accents
    ========================================================================== */
 
 :root {
@@ -377,6 +377,13 @@ body {
   border: 1px solid var(--border-subtle);
 }
 
+.sample-thumb-placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--accent-cyan);
+  font-size: 18px;
+}
+
 .sample-info {
   flex: 1;
   min-width: 0;
@@ -399,7 +406,7 @@ body {
   text-overflow: ellipsis;
 }
 
-/* Clinical Presets */
+/* Image enhancement presets */
 .preset-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -464,7 +471,7 @@ body {
 }
 
 /* ==========================================================================
-   Center Viewport: Radiology Split & Compare Viewer
+   Center Viewport: Image Split & Compare Viewer
    ========================================================================== */
 .viewport-card {
   display: flex;
@@ -820,7 +827,7 @@ body {
   border: 1px solid var(--border-subtle);
 }
 
-/* Clinical Parameters Accordion / Control sliders */
+/* Image processing controls */
 .controls-accordion {
   display: flex;
   flex-direction: column;
@@ -964,9 +971,9 @@ body {
 }
 
 /* ==========================================================================
-   Clinical Workstation Upgrade: DICOM HUD, Measurement Tools & CADe Triage
+   Image viewer controls and measurement tools
    ========================================================================== */
-.clinical-tools-bar {
+.measurement-tools-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1012,52 +1019,6 @@ body {
 .annotation-canvas.interactive {
   pointer-events: auto;
   cursor: crosshair;
-}
-
-.triage-heatmap-layer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  pointer-events: none;
-  z-index: 14;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.triage-card {
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.35);
-  border-radius: var(--radius-md);
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.triage-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--accent-amber);
-}
-
-.triage-stats {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  font-family: var(--font-mono);
-  color: var(--text-secondary);
-}
-
-.triage-disclaimer {
-  font-size: 10px;
-  color: var(--text-muted);
-  line-height: 1.35;
 }
 
 .secondary-action-btn {

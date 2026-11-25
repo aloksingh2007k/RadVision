@@ -1,14 +1,14 @@
 /**
- * RadVision Clinical Presets & Built-in Sample Reference Sets
+ * RadVision enhancement presets and generated sample images
  */
 
-const CLINICAL_PRESETS = [
+const IMAGE_PRESETS = [
   {
-    id: "radiology_standard",
-    name: "Radiology Gold Standard",
-    description: "Balanced clinical enhancement combining CLAHE, edge-preserving bilateral filtering, and high-frequency unsharp masking.",
-    icon: "fa-user-md",
-    tag: "All-Round",
+    id: "balanced",
+    name: "Balanced Enhancement",
+    description: "Combines local contrast adjustment, edge-preserving smoothing, and mild sharpening.",
+    icon: "fa-sliders",
+    tag: "General",
     pipeline: {
       denoise_method: "bilateral",
       bilateral_d: 7,
@@ -25,11 +25,11 @@ const CLINICAL_PRESETS = [
     }
   },
   {
-    id: "bone_fracture",
-    name: "Bone & Fracture Focus",
-    description: "Optimized for orthopedic evaluation: high-clip local contrast with Laplacian edge emphasis to reveal hairline fissures and trabecular architecture.",
-    icon: "fa-bone",
-    tag: "Orthopedic",
+    id: "edge_detail",
+    name: "Edge Detail",
+    description: "Applies stronger local contrast and edge emphasis for visual comparison.",
+    icon: "fa-border-all",
+    tag: "Detail",
     pipeline: {
       denoise_method: "median",
       median_ksize: 3,
@@ -43,11 +43,11 @@ const CLINICAL_PRESETS = [
     }
   },
   {
-    id: "pulmonary_chest",
-    name: "Pulmonary & Lung Field",
-    description: "Tuned for chest radiography: Non-Local Means noise suppression and soft gamma curve compensation to expose subtle lung nodules and vascular markings.",
-    icon: "fa-lungs",
-    tag: "Pulmonology",
+    id: "noise_contrast",
+    name: "Noise & Contrast",
+    description: "Applies non-local means smoothing, local contrast, and a mild tone adjustment.",
+    icon: "fa-wave-square",
+    tag: "Smoothing",
     pipeline: {
       denoise_method: "nlm",
       nlm_h: 7.0,
@@ -62,9 +62,9 @@ const CLINICAL_PRESETS = [
     }
   },
   {
-    id: "low_dose_denoise",
-    name: "Low-Dose Quantum Mottle Cleanup",
-    description: "Non-Local Means (NLM) Poisson filter to restore degraded, noisy scans from pediatric or portable low-dose X-ray equipment.",
+    id: "noise_reduction",
+    name: "Noise Reduction",
+    description: "Applies non-local means smoothing with local contrast adjustment.",
     icon: "fa-shield-halved",
     tag: "Noise Reduction",
     pipeline: {
@@ -79,11 +79,11 @@ const CLINICAL_PRESETS = [
     }
   },
   {
-    id: "thermal_density",
-    name: "False-Color Density Map",
-    description: "Converts continuous attenuation radiodensity into a calibrated perceptual pseudo-color heatmap (Inferno) to spot density anomalies.",
-    icon: "fa-fire-flame-curved",
-    tag: "Diagnostic Colormap",
+    id: "bone_tone_map",
+    name: "Bone Tone Map",
+    description: "Applies the Bone display palette with local contrast adjustment.",
+    icon: "fa-palette",
+    tag: "Display",
     pipeline: {
       denoise_method: "bilateral",
       bilateral_d: 5,
@@ -96,13 +96,13 @@ const CLINICAL_PRESETS = [
       sharpen_method: "unsharp",
       unsharp_strength: 1.0,
       unsharp_sigma: 1.2,
-      colormap: "inferno"
+      colormap: "bone"
     }
   },
   {
-    id: "bone_segmentation",
-    name: "Otsu Anatomical Segmentation",
-    description: "Calculates variance-optimal dynamic thresholding to segment high-density cortical bone and dental enamel from soft tissues.",
+    id: "threshold_preview",
+    name: "Threshold Preview",
+    description: "Shows a simple global thresholding result for algorithm demonstrations.",
     icon: "fa-circle-half-stroke",
     tag: "Segmentation",
     pipeline: {
@@ -120,66 +120,39 @@ const CLINICAL_PRESETS = [
 
 const SAMPLE_XRAYS = [
   {
-    id: "chest_pa_real_1",
-    name: "Chest Radiograph (PA View 1)",
-    type: "Chest PA",
-    isDicom: false,
-    condition: "Pulmonary vasculature & lung fields",
-    recommended_preset: "pulmonary_chest",
-    url: "/static/samples/chest_pa_real_1.jpg"
+    id: "chest_cardiomegaly_16bit",
+    name: "Synthetic chest pattern (16-bit)",
+    type: "Synthetic DICOM",
+    isDicom: true,
+    condition: "Generated locally by the sample generator",
+    recommended_preset: "balanced",
+    url: "/static/samples/chest_cardiomegaly_16bit.dcm"
   },
   {
-    id: "pelvis_ap_real_1",
-    name: "Pelvis & Bilateral Hips (AP 1)",
-    type: "Pelvis AP",
-    isDicom: false,
-    condition: "Acetabulum, sacrum & femoral necks",
-    recommended_preset: "radiology_standard",
-    url: "/static/samples/pelvis_ap_real_1.jpg"
+    id: "spine_scoliosis_16bit",
+    name: "Synthetic spine pattern (16-bit)",
+    type: "Synthetic DICOM",
+    isDicom: true,
+    condition: "Generated locally by the sample generator",
+    recommended_preset: "edge_detail",
+    url: "/static/samples/spine_scoliosis_16bit.dcm"
   },
   {
-    id: "chest_pa_real_2",
-    name: "Chest Radiograph (PA View 2)",
-    type: "Chest PA",
+    id: "pelvis_hip_ap",
+    name: "Synthetic pelvis pattern",
+    type: "Synthetic PNG",
     isDicom: false,
-    condition: "Hilar & mediastinal evaluation",
-    recommended_preset: "pulmonary_chest",
-    url: "/static/samples/chest_pa_real_2.jpg"
+    condition: "Generated locally by the sample generator",
+    recommended_preset: "balanced",
+    url: "/static/samples/pelvis_hip_ap.png"
   },
   {
-    id: "pelvis_ap_real_2",
-    name: "Pelvis & Hip (AP View 2)",
-    type: "Pelvis AP",
+    id: "foot_ankle_lateral",
+    name: "Synthetic foot pattern",
+    type: "Synthetic PNG",
     isDicom: false,
-    condition: "Right femoral neck & pelvic ring",
-    recommended_preset: "bone_fracture",
-    url: "/static/samples/pelvis_ap_real_2.jpg"
-  },
-  {
-    id: "chest_lateral_real",
-    name: "Chest Radiograph (Lateral)",
-    type: "Chest Lat",
-    isDicom: false,
-    condition: "Thoracic spine & retrosternal space",
-    recommended_preset: "pulmonary_chest",
-    url: "/static/samples/chest_lateral_real.jpg"
-  },
-  {
-    id: "femur_fracture_real",
-    name: "Pelvis & Left Femur Fracture",
-    type: "Trauma AP",
-    isDicom: false,
-    condition: "Displaced left femoral shaft fracture",
-    recommended_preset: "bone_fracture",
-    url: "/static/samples/femur_fracture_real.jpg"
-  },
-  {
-    id: "chest_pa_real_3",
-    name: "Chest Radiograph (Cardiothoracic)",
-    type: "Chest PA",
-    isDicom: false,
-    condition: "Cardiac silhouette & CTR assessment",
-    recommended_preset: "pulmonary_chest",
-    url: "/static/samples/chest_pa_real_3.jpg"
+    condition: "Generated locally by the sample generator",
+    recommended_preset: "edge_detail",
+    url: "/static/samples/foot_ankle_lateral.png"
   }
 ];

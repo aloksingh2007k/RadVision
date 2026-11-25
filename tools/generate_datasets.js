@@ -1,13 +1,13 @@
 /**
- * Generates additional 16-bit DICOM (.dcm) and 8-bit PNG X-ray datasets
- * in static/samples/ using zero external dependencies (Node.js built-in fs & zlib).
+ * Generates four synthetic demonstration images in static/samples/.
+ * Run once with `node tools/generate_datasets.js` when recreating those files.
  */
 
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
 
-const SAMPLE_DIR = path.join(__dirname, "static", "samples");
+const SAMPLE_DIR = path.join(__dirname, "..", "static", "samples");
 if (!fs.existsSync(SAMPLE_DIR)) fs.mkdirSync(SAMPLE_DIR, { recursive: true });
 
 // Simple CRC32 for PNG chunks
@@ -85,8 +85,8 @@ function saveDicom16(filePath, pixels16, width, height, meta) {
   pushTag(0x0002, 0x0010, "UI", Buffer.from("1.2.840.10008.1.2.1\0", "ascii"));
   pushTag(0x0008, 0x0020, "DA", Buffer.from(padEven(meta.studyDate || "20261125")));
   pushTag(0x0008, 0x0060, "CS", Buffer.from(padEven(meta.modality || "DX")));
-  pushTag(0x0010, 0x0010, "PN", Buffer.from(padEven(meta.patientName || "CLINICAL^CASE")));
-  pushTag(0x0010, 0x0020, "LO", Buffer.from(padEven(meta.patientID || "DCM-001")));
+  pushTag(0x0010, 0x0010, "PN", Buffer.from(padEven(meta.patientName || "SYNTHETIC^DEMO")));
+  pushTag(0x0010, 0x0020, "LO", Buffer.from(padEven(meta.patientID || "SAMPLE-001")));
   pushTag(0x0018, 0x0015, "CS", Buffer.from(padEven(meta.bodyPart || "CHEST")));
   pushTag(0x0018, 0x0060, "DS", Buffer.from(padEven(meta.kvp || "120")));
   pushTag(0x0028, 0x0004, "CS", Buffer.from(padEven("MONOCHROME2")));
@@ -170,8 +170,8 @@ function makeChestCardiomegalyDicom() {
 
   addNoise(buf, 55);
   saveDicom16(path.join(SAMPLE_DIR, "chest_cardiomegaly_16bit.dcm"), buf, w, h, {
-    patientName: "CARDIO^THORAX^01",
-    patientID: "DCM-CHEST-512",
+    patientName: "SYNTHETIC^CHEST",
+    patientID: "SAMPLE-CHEST-512",
     modality: "DX",
     bodyPart: "CHEST",
     kvp: "120",
@@ -205,8 +205,8 @@ function makeSpineScoliosisDicom() {
 
   addNoise(buf, 48);
   saveDicom16(path.join(SAMPLE_DIR, "spine_scoliosis_16bit.dcm"), buf, w, h, {
-    patientName: "SPINE^SCOLIOSIS^02",
-    patientID: "DCM-SPINE-512",
+    patientName: "SYNTHETIC^SPINE",
+    patientID: "SAMPLE-SPINE-512",
     modality: "CR",
     bodyPart: "THORACIC SPINE",
     kvp: "85",
@@ -263,9 +263,9 @@ function makeAnkleFootPng() {
   saveGrayscalePNG(path.join(SAMPLE_DIR, "foot_ankle_lateral.png"), buf, w, h);
 }
 
-console.log("Generating clinical 16-bit DICOM and PNG datasets...");
+console.log("Generating synthetic DICOM and PNG demonstration images...");
 makeChestCardiomegalyDicom();
 makeSpineScoliosisDicom();
 makePelvisHipPng();
 makeAnkleFootPng();
-console.log("All new datasets written to static/samples/");
+console.log("Generated demonstration images in static/samples/");

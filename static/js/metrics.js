@@ -1,5 +1,5 @@
 /**
- * RadVision Pure JavaScript Medical Image Quality Assessment (IQA)
+ * RadVision image statistics and project evaluation metrics.
  * Computes PSNR, SSIM, Contrast Improvement Index (CII), Shannon Entropy,
  * Dynamic Dispersion, and 256-bin Intensity Histogram Profiles.
  */
@@ -18,7 +18,7 @@ const MedMetrics = (() => {
   }
 
   function computeSSIM(orig, enh, width, height) {
-    // Patch-based SSIM (8x8 non-overlapping blocks for fast, accurate clinical benchmark)
+    // Patch-based SSIM (8x8 non-overlapping blocks for project experiments)
     const c1 = (0.01 * 255) ** 2;
     const c2 = (0.03 * 255) ** 2;
     const blockSize = 8;
@@ -139,32 +139,36 @@ const MedMetrics = (() => {
     return profile;
   }
 
-  function evaluateAll(origGray, enhGray, width, height) {
-    const psnr = computePSNR(origGray, enhGray);
-    const ssim = computeSSIM(origGray, enhGray, width, height);
-    const cii = computeCII(origGray, enhGray, width, height);
+  function evaluateDisplayStats(origGray, enhGray, width, height) {
     const entOrig = computeEntropy(origGray);
     const entEnh = computeEntropy(enhGray);
-    const statsOrig = computeStats(origGray);
-    const statsEnh = computeStats(enhGray);
-
     return {
-      psnr,
-      ssim,
-      cii,
-      entropy_original: entOrig,
-      entropy_enhanced: entEnh,
+      cii: computeCII(origGray, enhGray, width, height),
       entropy_delta: Number((entEnh - entOrig).toFixed(3)),
-      mean_original: statsOrig.mean,
-      mean_enhanced: statsEnh.mean,
-      std_original: statsOrig.std,
-      std_enhanced: statsEnh.std,
       hist_original: computeHistogramProfile(origGray),
       hist_enhanced: computeHistogramProfile(enhGray)
     };
   }
 
+  function evaluateAll(origGray, enhGray, width, height) {
+    const psnr = computePSNR(origGray, enhGray);
+    const ssim = computeSSIM(origGray, enhGray, width, height);
+    const statsOrig = computeStats(origGray);
+    const statsEnh = computeStats(enhGray);
+
+    return {
+      ...evaluateDisplayStats(origGray, enhGray, width, height),
+      psnr,
+      ssim,
+      mean_original: statsOrig.mean,
+      mean_enhanced: statsEnh.mean,
+      std_original: statsOrig.std,
+      std_enhanced: statsEnh.std
+    };
+  }
+
   return {
-    evaluateAll
+    evaluateAll,
+    evaluateDisplayStats
   };
 })();

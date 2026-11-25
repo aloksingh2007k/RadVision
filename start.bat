@@ -1,5 +1,5 @@
 @echo off
-title RadVision Medical Image Workstation (Node.js)
-echo Starting RadVision Medical Image Preprocessing & Enhancement Workstation...
+title RadVision Image Enhancement Demo (Node.js)
+echo Starting RadVision Image Enhancement Demo...
 node server.js
 pause

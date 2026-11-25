@@ -1,13 +1,13 @@
 /**
- * RadVision Calibrated Anatomical Measurement & Annotation Engine
- * Supports: Ruler (mm), Angle / Cobb Angle (deg), Cardiothoracic Ratio (CTR), and ROI Probe
+ * RadVision image measurement & annotation tools.
+ * Ruler lengths use DICOM spacing when available and pixels otherwise.
  */
 
 const AnnotationTools = (() => {
-  let activeTool = "none"; // "none", "ruler", "angle", "ctr", "roi"
+  let activeTool = "none"; // "none", "ruler", "angle", "roi"
   let annotations = [];
   let draft = null;
-  let pixelSpacing = [0.2, 0.2]; // [rowSpacingMm, colSpacingMm]
+  let pixelSpacing = null; // [rowSpacingMm, colSpacingMm]
   let hasCalibratedSpacing = false;
 
   function setTool(tool) {
@@ -20,7 +20,7 @@ const AnnotationTools = (() => {
   }
 
   function setCalibration(spacingArr, isCalibrated) {
-    pixelSpacing = spacingArr || [0.2, 0.2];
+    pixelSpacing = isCalibrated ? spacingArr : null;
     hasCalibratedSpacing = !!isCalibrated;
   }
 
@@ -36,9 +36,9 @@ const AnnotationTools = (() => {
   function distMm(p1, p2, imgW, imgH) {
     const dxPx = (p2.x - p1.x) * imgW;
     const dyPx = (p2.y - p1.y) * imgH;
-    const dxMm = dxPx * pixelSpacing[1];
-    const dyMm = dyPx * pixelSpacing[0];
-    const mm = Math.sqrt(dxMm * dxMm + dyMm * dyMm);
+    const dxMm = hasCalibratedSpacing ? dxPx * pixelSpacing[1] : null;
+    const dyMm = hasCalibratedSpacing ? dyPx * pixelSpacing[0] : null;
+    const mm = hasCalibratedSpacing ? Math.sqrt(dxMm * dxMm + dyMm * dyMm) : null;
     const px = Math.sqrt(dxPx * dxPx + dyPx * dyPx);
     return { mm, px };
   }
@@ -119,17 +119,6 @@ const AnnotationTools = (() => {
       return true;
     }
 
-    if (activeTool === "ctr") {
-      if (!draft) {
-        draft = { type: "ctr", step: 1, c1: normPt, c2: normPt, t1: null, t2: null };
-      } else if (draft.step === 2) {
-        draft.step = 3;
-        draft.t1 = normPt;
-        draft.t2 = normPt;
-      }
-      return true;
-    }
-
     return false;
   }
 
@@ -137,11 +126,6 @@ const AnnotationTools = (() => {
     if (!draft) return false;
     if (draft.type === "ruler" || draft.type === "roi") {
       draft.p2 = normPt;
-      return true;
-    }
-    if (draft.type === "ctr") {
-      if (draft.step === 1) draft.c2 = normPt;
-      else if (draft.step === 3) draft.t2 = normPt;
       return true;
     }
     return false;
@@ -154,7 +138,7 @@ const AnnotationTools = (() => {
       draft.p2 = normPt;
       const { mm, px } = distMm(draft.p1, draft.p2, imgW, imgH);
       if (px > 4) {
-        draft.label = hasCalibratedSpacing ? `${mm.toFixed(1)} mm` : `${mm.toFixed(1)} mm (est.) / ${Math.round(px)} px`;
+        draft.label = hasCalibratedSpacing ? `${mm.toFixed(1)} mm` : `${px.toFixed(1)} px`;
         annotations.push(draft);
       }
       draft = null;
@@ -170,24 +154,6 @@ const AnnotationTools = (() => {
         annotations.push(draft);
       }
       draft = null;
-      return true;
-    }
-
-    if (draft.type === "ctr") {
-      if (draft.step === 1) {
-        draft.c2 = normPt;
-        draft.step = 2; // Waiting for Thoracic width drag
-      } else if (draft.step === 3) {
-        draft.t2 = normPt;
-        const cDist = distMm(draft.c1, draft.c2, imgW, imgH).mm;
-        const tDist = distMm(draft.t1, draft.t2, imgW, imgH).mm;
-        const ratio = tDist > 0 ? cDist / tDist : 0;
-        const flag = ratio > 0.50 ? "Cardiomegaly (>0.50)" : "Normal (≤0.50)";
-        draft.ratio = ratio;
-        draft.label = `CTR: ${ratio.toFixed(2)} [${flag}]`;
-        annotations.push(draft);
-        draft = null;
-      }
       return true;
     }
 
@@ -213,7 +179,7 @@ const AnnotationTools = (() => {
         drawEndpoint(ctx, x2, y2, "#00f0ff");
 
         const { mm, px } = distMm(item.p1, item.p2, imgW, imgH);
-        const lbl = item.label || (hasCalibratedSpacing ? `${mm.toFixed(1)} mm` : `${mm.toFixed(1)} mm (${Math.round(px)}px)`);
+        const lbl = item.label || (hasCalibratedSpacing ? `${mm.toFixed(1)} mm` : `${px.toFixed(1)} px`);
         drawLabel(ctx, (x1 + x2) / 2, (y1 + y2) / 2 - 12, lbl, "#00f0ff");
       } else if (item.type === "angle") {
         const pts = item.points;
@@ -244,29 +210,6 @@ const AnnotationTools = (() => {
         const stats = item.stats || computeRoiStats(item.p1, item.p2, grayBuffer, imgW, imgH);
         if (stats) {
           drawLabel(ctx, rx, ry - 8, `μ:${stats.mean} σ:${stats.std} SNR:${stats.snr}`, "#00e6a8");
-        }
-      } else if (item.type === "ctr") {
-        // Cardiac line
-        const cx1 = item.c1.x * canvasW, cy1 = item.c1.y * canvasH;
-        const cx2 = item.c2.x * canvasW, cy2 = item.c2.y * canvasH;
-        ctx.strokeStyle = "#f43f5e";
-        ctx.lineWidth = 2.2;
-        ctx.beginPath();
-        ctx.moveTo(cx1, cy1);
-        ctx.lineTo(cx2, cy2);
-        ctx.stroke();
-        drawLabel(ctx, (cx1 + cx2) / 2, cy1 - 10, "Cardiac Width", "#f43f5e");
-
-        if (item.t1 && item.t2) {
-          const tx1 = item.t1.x * canvasW, ty1 = item.t1.y * canvasH;
-          const tx2 = item.t2.x * canvasW, ty2 = item.t2.y * canvasH;
-          ctx.strokeStyle = "#3b82f6";
-          ctx.lineWidth = 2.2;
-          ctx.beginPath();
-          ctx.moveTo(tx1, ty1);
-          ctx.lineTo(tx2, ty2);
-          ctx.stroke();
-          drawLabel(ctx, (tx1 + tx2) / 2, ty1 + 18, item.label || "Thoracic Width", "#3b82f6");
         }
       }
       ctx.restore();

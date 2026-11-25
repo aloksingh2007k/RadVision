@@ -1,14 +1,14 @@
 {
-  "name": "radvision-medical-imaging",
+  "name": "radvision-image-enhancement",
   "version": "1.0.0",
-  "description": "Medical Image Preprocessing and Enhancement Workstation built with HTML5 Canvas, CSS3, Pure JavaScript, and Node.js",
+  "description": "Browser-based image enhancement demo with limited DICOM image support",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "keywords": [
-    "medical-imaging",
-    "x-ray",
+    "image-processing",
+    "dicom",
     "clahe",
     "image-enhancement",
     "html5-canvas"

@@ -1,7 +1,7 @@
 /**
- * RadVision Pure JavaScript Medical Image Preprocessing & Enhancement Engine
+ * RadVision browser image enhancement engine
  * Operates directly on 8-bit grayscale TypedArrays (Uint8Array / Float32Array)
- * extracted from HTML5 Canvas ImageData for real-time clinical performance.
+ * extracted from HTML5 Canvas ImageData for real-time browser processing.
  */
 
 const MedEngine = (() => {
@@ -455,32 +455,16 @@ const MedEngine = (() => {
   }
 
   /**
-   * Diagnostic Pseudo-Color LUT Generator (Bone, Inferno, Jet, Viridis, Ocean)
+   * Bone display palette LUT.
    */
   function applyColormap(src, colormapName) {
     if (!colormapName || colormapName === "monochrome") {
       return { buffer: src, isRGB: false };
     }
 
-    const stops = {
-      bone: [
-        [0, 0, 0], [0, 20, 40], [80, 120, 140], [180, 210, 220], [255, 255, 255]
-      ],
-      inferno: [
-        [0, 0, 4], [66, 10, 104], [147, 38, 103], [221, 81, 58], [252, 165, 10], [252, 255, 164]
-      ],
-      jet: [
-        [0, 0, 130], [0, 80, 255], [0, 255, 255], [255, 255, 0], [255, 60, 0], [128, 0, 0]
-      ],
-      viridis: [
-        [68, 1, 84], [59, 82, 139], [33, 145, 140], [94, 201, 98], [253, 231, 37]
-      ],
-      ocean: [
-        [0, 10, 30], [0, 60, 110], [0, 140, 180], [90, 220, 230], [240, 255, 255]
-      ]
-    };
-
-    const palette = stops[colormapName.toLowerCase()] || stops.bone;
+    const palette = [
+      [0, 0, 0], [0, 20, 40], [80, 120, 140], [180, 210, 220], [255, 255, 255]
+    ];
     const lut = new Uint8Array(256 * 3);
     const n = palette.length - 1;
 
@@ -504,7 +488,7 @@ const MedEngine = (() => {
   }
 
   /**
-   * Full Sequential Medical Image Processing Pipeline
+   * Sequential image processing pipeline
    */
   function processPipeline(grayBuffer, width, height, params) {
     let current = new Uint8Array(grayBuffer);

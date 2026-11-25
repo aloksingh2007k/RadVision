@@ -38,36 +38,9 @@ Compressed transfer syntaxes (including JPEG, JPEG-LS, JPEG 2000, RLE, and defla
 - **CII**: Contrast Improvement Index ($C_{\text{enhanced}} / C_{\text{original}}$)
 - **Shannon Entropy**: Information richness in bits/pixel
 - **256-Bin Histogram**: Live comparative attenuation distribution rendered on HTML5 Canvas
+___
 
----
-
-## 📂 4. Project Structure
-
-```
-AAR Proj/
-├── server.js                  # Zero-dependency Node.js static server
-├── package.json               # Project metadata & npm start script
-├── start.bat                  # One-click Windows launcher
-├── README.md                  # Project documentation
-└── static/
-    ├── index.html             # Progressive Dark Medical Workstation UI
-    ├── css/
-    │   └── style.css          # Glassmorphism & responsive clinical styling
-    ├── js/
-    │   ├── engine.js          # Pure JS Medical Image Enhancement Engine
-    │   ├── metrics.js         # Pure JS PSNR, SSIM, CII, Entropy & Histograms
-    │   ├── presets.js         # Clinical Presets & Sample Reference Sets
-    │   └── app.js             # Workstation UI, Split Slider, Zoom & Batch ZIP
-    └── samples/
-        ├── chest_pneumonia.png
-        ├── hand_fracture.png
-        ├── knee_joint.png
-        └── dental_panoramic.png
-```
-
----
-
-## 🚀 5. How to Run
+## 🚀 4. How to Run
 
 Double-click `start.bat` or run in terminal:
 ```bash
